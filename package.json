@@ -1,0 +1,18 @@
+{
+  "name": "Earpiece",
+  "version": "0.1.0",
+  "scripts": {
+    "test": "jest test",
+    "server": "webpack-dev-server --open --config webpack/webpack.development.js",
+    "build": "webpack --config webpack/webpack.production.js",
+    "deploy": "ssh twodee \"rm /var/www/twodee/earpiece/*\" && scp -r public/* dist twodee:/var/www/twodee/earpiece && ssh twodee \"cd /var/www/twodee/earpiece && chmod -R g+rX *\""
+  },
+  "devDependencies": {
+    "babel-plugin-transform-es2015-modules-commonjs": "^6.26.2",
+    "jsdom": "^14.1.0",
+    "webpack": "^4.41.5",
+    "webpack-cli": "^3.3.10",
+    "webpack-dev-server": "^3.10.1"
+  },
+  "dependencies": {}
+}
