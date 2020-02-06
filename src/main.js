@@ -1,4 +1,6 @@
-function generateWav() {
+// http://soundfile.sapp.org/doc/WaveFormat
+
+function generateWav(samples) {
   let index = 0;
 
   const putString = text => {
@@ -9,31 +11,30 @@ function generateWav() {
   };
 
   const putInt = x => {
-    view.setUint32(index, x);
+    view.setUint32(index, x, true);
     index += 4;
   };
 
   const putShort = x => {
-    view.setUint16(index, x);
+    view.setUint16(index, x, true);
     index += 2;
   };
 
   const putSample = x => {
-    view.setInt16(index, x);
+    view.setInt16(index, x, true);
     index += 2;
   };
 
-  const nsamples = 5000;
-  const a = 36 + nsamples * 2;
+  const a = 36 + samples.length * 2;
   const b = 2 * 8;
   const c = 1;
   const d = 22050;
   const e = d * 2;
   const f = 2;
   const g = 16;
-  const h = nsamples * 2;
+  const h = samples.length * 2;
 
-  const size = 4 * 9 + 2 * 4 + 2 * nsamples;
+  const size = 4 * 9 + 2 * 4 + 2 * samples.length;
 
   let buffer = new ArrayBuffer(size);
   let view = new DataView(buffer);
@@ -52,8 +53,8 @@ function generateWav() {
   putString('data');
   putInt(h);
 
-  for (let i = 0; i < nsamples; ++i) {
-    putSample(parseInt(Math.random() * 65536) - 32768);
+  for (let i = 0; i < samples.length; ++i) {
+    putSample(samples[i]);
   }
 
   let binary = '';
@@ -65,8 +66,24 @@ function generateWav() {
   let base64 = btoa(binary);
   let wav = new Audio('data:Audio/WAV;base64,' + base64);
   wav.setAttribute('controls', 'controls');
-  // wav.play();
   document.body.appendChild(wav);
 }
 
-generateWav();
+function getRandom() {
+  let samples = new Array(50000);
+  for (let i = 0; i < samples.length; ++i) {
+    samples[i] = parseInt(Math.random() * 65536) - 32768;
+  }
+  return samples;
+}
+
+function sine() {
+  let samples = new Array(50000);
+  const cyclesPerSample = 440 / 22050.0;
+  for (let i = 0; i < samples.length; ++i) {
+    samples[i] = Math.sin(2 * Math.PI * i * cyclesPerSample) * 32767;
+  }
+  return samples;
+}
+
+generateWav(sine());
