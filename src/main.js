@@ -78,11 +78,22 @@ function getRandom() {
 }
 
 function sine() {
-  let samples = new Array(50000);
-  const cyclesPerSample = 440 / 22050.0;
-  for (let i = 0; i < samples.length; ++i) {
-    samples[i] = Math.sin(2 * Math.PI * i * cyclesPerSample) * 32767;
+  const frequencies = [440, 880, 1000, 1500];
+  const clipLength = 100000;
+  let samples = new Array(frequencies.length * clipLength);
+  let p = 0;
+
+  for (let [fi, frequency] of frequencies.entries()) {
+    let cyclesPerSample = frequency / 22050.0;
+    for (let si = fi * clipLength; si < (fi + 1) * clipLength; ++si) {
+      samples[si] = Math.sin(2 * Math.PI * p) * 32767;
+      p += cyclesPerSample;
+      if (p >= 1) {
+        p -= 1;
+      }
+    }
   }
+
   return samples;
 }
 
