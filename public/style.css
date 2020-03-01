@@ -83,3 +83,7 @@ body {
 #split-piece-button {
   margin-top: 10px;
 }
+
+.error {
+  outline: 2px solid rgb(255, 100, 100);
+}

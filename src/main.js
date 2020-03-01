@@ -5,7 +5,7 @@ let waveTypePicker;
 let dutyCycleLabel;
 let dutyCycleInput;
 
-function generateWav(samples) {
+function samplesToWav(samples) {
   let index = 0;
 
   const putString = text => {
@@ -69,17 +69,7 @@ function generateWav(samples) {
   }
 
   let base64 = btoa(binary);
-  let wav = new Audio('data:Audio/WAV;base64,' + base64);
-  wav.setAttribute('controls', 'controls');
-  document.body.appendChild(wav);
-}
-
-function getRandom() {
-  let samples = new Array(50000);
-  for (let i = 0; i < samples.length; ++i) {
-    samples[i] = parseInt(Math.random() * 65536) - 32768;
-  }
-  return samples;
+  return 'data:Audio/WAV;base64,' + base64;
 }
 
 function sine(p) {
@@ -98,26 +88,6 @@ function sawtooth(p) {
 
 function triangle(p) {
   return 2 * (0.5 - Math.abs(0.5 - p));
-}
-
-function sample(f) {
-  const frequencies = [440, 880, 1000, 1500];
-  const clipLength = 10000;
-  let samples = new Array(frequencies.length * clipLength);
-  let p = 0;
-
-  for (let [fi, frequency] of frequencies.entries()) {
-    let cyclesPerSample = frequency / 22050.0;
-    for (let si = fi * clipLength; si < (fi + 1) * clipLength; ++si) {
-      samples[si] = f(p) * 32767;
-      p += cyclesPerSample;
-      if (p >= 1) {
-        p -= 1;
-      }
-    }
-  }
-
-  return samples;
 }
 
 function setInterpolators(pieces) {
@@ -159,7 +129,7 @@ function quadraticInterpolant(fromTime, fromValue, throughTime, throughValue, to
   };
 }
 
-function generateSamples(effect) {
+function effectToSamples(effect) {
   setInterpolators(effect.frequencies);
   setInterpolators(effect.amplitudes);
 
@@ -241,24 +211,30 @@ const effect = {
   ],
 };
 
-// generateWav(generateSamples(effect));
-
-// generateWav(sample(sine));
-// generateWav(sample(sawtooth));
-// generateWav(sample(triangle));
-// generateWav(sample(square(0.1)));
-// generateWav(sample(square(0.2)));
-// generateWav(sample(square(0.4)));
-// generateWav(sample(square(0.5)));
-// generateWav(sample(square(0.6)));
-// generateWav(sample(square(0.8)));
-// generateWav(sample(square(0.95)));
+function generateWav() {
+  const samples = effectToSamples(effect);
+  const wav = samplesToWav(samples);
+  player.src = wav;
+}
 
 function initialize() {
   durationInput = document.getElementById('duration-input');
   waveTypePicker = document.getElementById('wave-type-picker');
   dutyCycleLabel = document.getElementById('duty-cycle-label');
   dutyCycleInput = document.getElementById('duty-cycle-input');
+  player = document.getElementById('player');
+
+  durationInput.addEventListener('input', () => {
+    if (durationInput.value.match(/^\d+(\.\d+)?$/)) {
+      effect.duration = parseFloat(durationInput.value);
+      durationInput.classList.remove('error');
+    } else {
+      durationInput.classList.add('error');
+    }
+  });
+
+  const generateWavButton = document.getElementById('generate-wav-button');
+  generateWavButton.addEventListener('click', generateWav);
 
   load(effect);
 }
