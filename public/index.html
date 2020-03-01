@@ -2,14 +2,76 @@
 <html>
 <head>
   <title>...</title>
-  <style>
-audio {
-  display: block;
-}
-  </style>
+  <link rel="stylesheet" href="style.css">
+  <script defer src="dist/bundle.js"></script>
 </head>
 <body>
-  
-  <script src="dist/bundle.js"></script>
+  <div id="root">
+    <div id="left">
+      <canvas id="frequency-canvas" class="function-canvas"></canvas>
+      <canvas id="amplitude-canvas" class="function-canvas"></canvas>
+    </div>
+    <div id="right">
+      <!-- --------------------------------------------------------------------- -->
+      <h1>Effect</h1>
+
+      <label for="duration-input">duration</label>
+      <input id="duration-input" type="text">
+
+      <label for="wave-type-picker">wave type</label>
+      <select id="wave-type-picker">
+        <option value="sine">sine</option>
+        <option value="sawtooth">sawtooth</option>
+        <option value="triangle">triangle</option>
+        <option value="square">square</option>
+      </select>
+
+      <label id="duty-cycle-label" for="duty-cycle-input">duty cycle</label>
+      <input id="duty-cycle-input" type="text">
+
+      <!-- --------------------------------------------------------------------- -->
+      <h1>Piece</h1>
+
+      <label for="piece-picker">piece</label>
+      <select id="piece-picker">
+        <option value="sine">sine</option>
+      </select>
+
+      <label for="piece-name-input">name</label>
+      <input id="piece-name-input" type="text">
+
+      <label for="start-time-input">start time</label>
+      <input id="start-time-input" type="text">
+
+      <label for="start-value-input">start value</label>
+      <input id="start-value-input" type="text">
+
+      <label id="interpolant-label" for="interpolant-input">interpolant</label>
+      <div id="interpolant-root">
+        <label><input type="radio" name="interpolant-input"> constant</label>
+        <label><input type="radio" name="interpolant-input"> linear</label>
+        <label><input type="radio" name="interpolant-input"> quadratic</label>
+      </div>
+
+      <label for="control-time-input">control time</label>
+      <input id="control-time-input" type="text">
+
+      <label for="control-value-input">control value</label>
+      <input id="control-value-input" type="text">
+
+      <button id="split-piece-button">split</button>
+      <button id="remove-piece-button">remove</button>
+
+      <!-- --------------------------------------------------------------------- -->
+      <h1>I/O</h1>
+
+      <audio controls></audio>
+
+      <button id="save-as-button">save as...</button>
+      <button id="save-button">save</button>
+      <button id="export-wav-button">export wav</button>
+      <button id="export-archive-button">export archive</button>
+    </div>
+  </div>
 </body>
 </html>

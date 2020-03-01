@@ -1,0 +1,85 @@
+html {
+  height: 100%;
+}
+
+body {
+  overscroll-behavior: none;
+  font-family: sans-serif;
+}
+
+#root {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+}
+
+#left {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.function-canvas {
+  flex: 1;
+}
+
+#right {
+  display: grid;
+  grid-template-columns: auto auto;
+  grid-column-gap: 5px;
+  grid-row-gap: 2px;
+  align-items: center;
+  align-content: start;
+  background-color: #C5D3ED;
+  padding: 10px;
+  overflow: auto;
+}
+
+#right > h1 {
+  grid-column: 1 / span 2;
+  margin: 0;
+}
+
+#right > h1:not(:first-child) {
+  margin-top: 20px;
+  border-top: 2px solid black;
+  padding-top: 10px;
+}
+
+#right > label {
+  justify-self: end;
+}
+
+#interpolant-label {
+  align-self: start;
+}
+
+#interpolant-root {
+  display: flex;
+  flex-direction: column;
+}
+
+#right audio, #right button {
+  grid-column: 1 / span 2;
+}
+
+#right audio {
+  margin: 10px 0;
+}
+
+#frequency-canvas {
+  background-color: cyan;
+}
+
+#amplitude-canvas {
+  background-color: lime;
+}
+
+#split-piece-button {
+  margin-top: 10px;
+}

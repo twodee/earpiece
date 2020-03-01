@@ -1,5 +1,10 @@
 // http://soundfile.sapp.org/doc/WaveFormat
 
+let durationInput;
+let waveTypePicker;
+let dutyCycleLabel;
+let dutyCycleInput;
+
 function generateWav(samples) {
   let index = 0;
 
@@ -115,7 +120,49 @@ function sample(f) {
   return samples;
 }
 
+function setInterpolators(pieces) {
+  for (let i = 0; i < pieces.length - 1; i += 1) {
+    let current = pieces[i];
+    let next = pieces[i + 1];
+
+    if (current.interpolant === 'constant') {
+      current.interpolate = constantInterpolant(current.value);
+    } else if (current.interpolant === 'linear') {
+      current.interpolate = linearInterpolant(current.time, current.value, next.time, next.value);
+    } else if (current.interpolant === 'quadratic') {
+      current.interpolate = quadraticInterpolant(current.time, current.value, current.control.time, current.control.value, next.time, next.value);
+    } else {
+      console.log("boo");
+    }
+  }
+}
+
+function constantInterpolant(value) {
+  return () => value;
+}
+
+function linearInterpolant(fromTime, fromValue, toTime, toValue) {
+  const denominator = toTime - fromTime;
+  return t => {
+    const p = (t - fromTime) / denominator;
+    return (1 - p) * fromValue + p * toValue;
+  };
+}
+
+function quadraticInterpolant(fromTime, fromValue, throughTime, throughValue, toTime, toValue) {
+  const denominator = (fromTime - throughTime) * (fromTime - toTime) * (throughTime - toTime);
+  const a = (toTime * (throughValue - fromValue) + throughTime * (fromValue - toValue) + fromTime * (toValue - throughValue)) / denominator;
+  const b = (toTime * toTime * (fromValue - throughValue) + throughTime * throughTime * (toValue - fromValue) + fromTime * fromTime * (throughValue - toValue)) / denominator;
+  const c = (throughTime * toTime * (throughTime - toTime) * fromValue + toTime * fromTime * (toTime - fromTime) * throughValue + fromTime * throughTime * (fromTime - fromTime) * toValue) / denominator;
+  return t => {
+    return a * t * t + b * t + c;
+  };
+}
+
 function generateSamples(effect) {
+  setInterpolators(effect.frequencies);
+  setInterpolators(effect.amplitudes);
+
   const nsamples = Math.round(effect.duration * effect.rate);
   let samples = new Array(nsamples);
   let p = 0;
@@ -124,13 +171,13 @@ function generateSamples(effect) {
   let amplitudeIndex = 0;
 
   for (let sampleIndex = 0; sampleIndex < nsamples; sampleIndex += 1) {
-    const proportion = sampleIndex / (nsamples - 1);
+    const t = sampleIndex / (nsamples - 1);
 
     // Advance to next pieces as needed.
-    if (proportion > effect.frequencies[frequencyIndex + 1][0]) {
+    if (t > effect.frequencies[frequencyIndex + 1].time) {
       frequencyIndex += 1;
     }
-    if (proportion > effect.amplitudes[amplitudeIndex + 1][0]) {
+    if (t > effect.amplitudes[amplitudeIndex + 1].time) {
       amplitudeIndex += 1;
     }
 
@@ -139,13 +186,11 @@ function generateSamples(effect) {
     const amplitudeA = effect.amplitudes[amplitudeIndex];
     const amplitudeB = effect.amplitudes[amplitudeIndex + 1];
 
-    // Interpolate frequency.
-    const frequencyT = (proportion - frequencyA[0]) / (frequencyB[0] - frequencyA[0]);
-    const frequency = (1 - frequencyT) * frequencyA[1] + frequencyT * frequencyB[1];
-
-    // Interpolate amplitude.
-    const amplitudeT = (proportion - amplitudeA[0]) / (amplitudeB[0] - amplitudeA[0]);
-    const amplitude = (1 - amplitudeT) * amplitudeA[1] + amplitudeT * amplitudeB[1];
+    // Interpolate.
+    const frequencyT = (t - frequencyA.time) / (frequencyB.time - frequencyA.time);
+    const amplitudeT = (t - amplitudeA.time) / (amplitudeB.time - amplitudeA.time);
+    const frequency = frequencyA.interpolate(t);
+    const amplitude = amplitudeA.interpolate(t);
 
     const cyclesPerSample = frequency / effect.rate;
 
@@ -158,23 +203,45 @@ function generateSamples(effect) {
 }
 
 const effect = {
-  rate: 11025,
-  generator: sawtooth,
+  rate: 22050,
+  generator: sine,
   duration: 1,
   frequencies: [
-    [0, 880],
-    [0.5, 880],
-    [0.75, 3000],
-    [1, 0],
+    // {time: 0, value: 440, interpolant: 'constant'},
+    // {time: 0.2, value: 880, interpolant: 'constant'},
+    // {time: 0.5, value: 1320, interpolant: 'constant'},
+    // {time: 1, value: 1760},
+
+    // {time: 0, value: 880, interpolant: 'constant'},
+    // {time: 0.5, value: 880, interpolant: 'linear'},
+    // {time: 0.75, value: 3000, interpolant: 'linear'},
+    // {time: 1, value: 0 },
+
+    {name: 'whoop', time: 0, value: 880, control: {time: 0.5, value: 3000}, interpolant: 'quadratic'},
+    {name: 'end', time: 1, value: 200},
+
+    // [0, 880],
+    // [0.5, 880],
+    // [0.75, 3000],
+    // [1, 0],
   ],
   amplitudes: [
-    [0, 1],
-    [0.5, 1],
-    [1, 0],
+    // {time: 0, value: 0, interpolant: 'linear'},
+    // {time: 0.1, value: 1, interpolant: 'constant'},
+    // {time: 0.5, value: 1, interpolant: 'linear'},
+    // {time: 1, value: 0 },
+
+    {name: 'start', time: 0, value: 1, interpolant: 'constant'},
+    {name: 'end', time: 1, value: 1 },
+
+    // [0, 0],
+    // [0.1, 1],
+    // [0.5, 1],
+    // [1, 0],
   ],
 };
 
-generateWav(generateSamples(effect));
+// generateWav(generateSamples(effect));
 
 // generateWav(sample(sine));
 // generateWav(sample(sawtooth));
@@ -186,3 +253,18 @@ generateWav(generateSamples(effect));
 // generateWav(sample(square(0.6)));
 // generateWav(sample(square(0.8)));
 // generateWav(sample(square(0.95)));
+
+function initialize() {
+  durationInput = document.getElementById('duration-input');
+  waveTypePicker = document.getElementById('wave-type-picker');
+  dutyCycleLabel = document.getElementById('duty-cycle-label');
+  dutyCycleInput = document.getElementById('duty-cycle-input');
+
+  load(effect);
+}
+
+function load(effect) {
+  durationInput.value = effect.duration;
+}
+
+document.addEventListener('DOMContentLoaded', initialize);
