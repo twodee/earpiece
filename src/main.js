@@ -1,9 +1,20 @@
 // http://soundfile.sapp.org/doc/WaveFormat
 
+const Wave = Object.freeze({
+  Sine: 'Sine',
+  Triangle: 'Triangle',
+  Sawtooth: 'Sawtooth',
+  Square: 'Square',
+});
+
+// --------------------------------------------------------------------------- 
+
 let durationInput;
 let waveTypePicker;
 let dutyCycleLabel;
 let dutyCycleInput;
+
+// --------------------------------------------------------------------------- 
 
 function samplesToWav(samples) {
   let index = 0;
@@ -140,6 +151,19 @@ function effectToSamples(effect) {
   let frequencyIndex = 0;
   let amplitudeIndex = 0;
 
+  let generator;
+  if (effect.waveType === Wave.Sine) {
+    generator = sine;
+  } else if (effect.waveType === Wave.Sawtooth) {
+    generator = sawtooth;
+  } else if (effect.waveType === Wave.Triangle) {
+    generator = triangle;
+  } else if (effect.waveType === Wave.Square) {
+    generator = square(effect.dutyCycle);
+  } else {
+    throw new Error('bad wave type');
+  }
+
   for (let sampleIndex = 0; sampleIndex < nsamples; sampleIndex += 1) {
     const t = sampleIndex / (nsamples - 1);
 
@@ -164,7 +188,7 @@ function effectToSamples(effect) {
 
     const cyclesPerSample = frequency / effect.rate;
 
-    samples[sampleIndex] = effect.generator(p) * amplitude; p += cyclesPerSample; if (p >= 1) {
+    samples[sampleIndex] = generator(p) * amplitude; p += cyclesPerSample; if (p >= 1) {
       p -= 1;
     }
   }
@@ -174,7 +198,8 @@ function effectToSamples(effect) {
 
 const effect = {
   rate: 22050,
-  generator: sine,
+  waveType: Wave.Sawtooth,
+  dutyCycle: 0.2,
   duration: 1,
   frequencies: [
     // {time: 0, value: 440, interpolant: 'constant'},
@@ -224,13 +249,30 @@ function initialize() {
   dutyCycleInput = document.getElementById('duty-cycle-input');
   player = document.getElementById('player');
 
-  durationInput.addEventListener('input', () => {
-    if (durationInput.value.match(/^\d+(\.\d+)?$/)) {
-      effect.duration = parseFloat(durationInput.value);
-      durationInput.classList.remove('error');
-    } else {
-      durationInput.classList.add('error');
-    }
+  for (let type of Object.keys(Wave)) {
+    let option = document.createElement('option');
+    option.value = type;
+    option.textContent = type.toLowerCase();
+    waveTypePicker.appendChild(option);
+  }
+
+  const registerFloatListener = (input, key) => {
+    input.addEventListener('input', () => {
+      if (input.value.match(/^\d+(\.\d+)?$/)) {
+        effect[key] = parseFloat(input.value);
+        input.classList.remove('error');
+      } else {
+        input.classList.add('error');
+      }
+    });
+  };
+
+  registerFloatListener(durationInput, 'duration');
+  registerFloatListener(dutyCycleInput, 'dutyCycle');
+
+  waveTypePicker.addEventListener('change', event => {
+    effect.waveType = waveTypePicker.value;
+    syncWaveOptions();
   });
 
   const generateWavButton = document.getElementById('generate-wav-button');
@@ -239,8 +281,21 @@ function initialize() {
   load(effect);
 }
 
+function syncWaveOptions() {
+  dutyCycleInput.value = effect.dutyCycle;
+  if (effect.waveType === Wave.Square) {
+    dutyCycleLabel.style.display = 'inline';
+    dutyCycleInput.style.display = 'inline';
+  } else {
+    dutyCycleLabel.style.display = 'none';
+    dutyCycleInput.style.display = 'none';
+  }
+}
+
 function load(effect) {
   durationInput.value = effect.duration;
+  waveTypePicker.value = effect.waveType;
+  syncWaveOptions();
 }
 
 document.addEventListener('DOMContentLoaded', initialize);

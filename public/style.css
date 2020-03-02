@@ -87,3 +87,7 @@ body {
 .error {
   outline: 2px solid rgb(255, 100, 100);
 }
+
+#duty-cycle-label, #duty-cycle-input {
+  display: none;
+}
