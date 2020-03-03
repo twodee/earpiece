@@ -30,7 +30,6 @@
 
       <label for="piece-picker">piece</label>
       <select id="piece-picker">
-        <option value="sine">sine</option>
       </select>
 
       <label for="piece-name-input">name</label>
@@ -42,17 +41,13 @@
       <label for="start-value-input">start value</label>
       <input id="start-value-input" type="text">
 
-      <label id="interpolant-label" for="interpolant-input">interpolant</label>
-      <div id="interpolant-root">
-        <label><input type="radio" name="interpolant-input"> constant</label>
-        <label><input type="radio" name="interpolant-input"> linear</label>
-        <label><input type="radio" name="interpolant-input"> quadratic</label>
-      </div>
+      <label for="interpolant-picker">interpolant</label>
+      <select id="interpolant-picker"></select>
 
-      <label for="control-time-input">control time</label>
+      <label id="control-time-label" for="control-time-input">control time</label>
       <input id="control-time-input" type="text">
 
-      <label for="control-value-input">control value</label>
+      <label id="control-value-label" for="control-value-input">control value</label>
       <input id="control-value-input" type="text">
 
       <button id="split-piece-button">split</button>

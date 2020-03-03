@@ -30,7 +30,7 @@ body {
 
 #right {
   display: grid;
-  grid-template-columns: auto auto;
+  grid-template-columns: 120px auto;
   grid-column-gap: 5px;
   grid-row-gap: 2px;
   align-items: center;
@@ -55,10 +55,6 @@ body {
   justify-self: end;
 }
 
-#interpolant-label {
-  align-self: start;
-}
-
 #interpolant-root {
   display: flex;
   flex-direction: column;
@@ -70,6 +66,7 @@ body {
 
 #right audio {
   margin: 10px 0;
+  outline: none;
 }
 
 #frequency-canvas {

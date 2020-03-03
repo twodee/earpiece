@@ -1,10 +1,16 @@
 // http://soundfile.sapp.org/doc/WaveFormat
 
 const Wave = Object.freeze({
-  Sine: 'Sine',
-  Triangle: 'Triangle',
-  Sawtooth: 'Sawtooth',
-  Square: 'Square',
+  Sine: 'sine',
+  Triangle: 'triangle',
+  Sawtooth: 'sawtooth',
+  Square: 'square',
+});
+
+const Interpolant = Object.freeze({
+  Constant: 'constant',
+  Linear: 'linear',
+  Quadratic: 'quadratic',
 });
 
 // --------------------------------------------------------------------------- 
@@ -13,6 +19,18 @@ let durationInput;
 let waveTypePicker;
 let dutyCycleLabel;
 let dutyCycleInput;
+
+let piecePicker;
+let pieceNameInput;
+let startTimeInput;
+let startValueInput;
+let interpolantPicker;
+let controlTimeLabel;
+let controlTimeInput;
+let controlValueLabel;
+let controlValueInput;
+
+let currentPiece;
 
 // --------------------------------------------------------------------------- 
 
@@ -107,11 +125,11 @@ function setInterpolators(pieces) {
     let next = pieces[i + 1];
 
     if (current.interpolant === 'constant') {
-      current.interpolate = constantInterpolant(current.value);
+      current.interpolate = constantInterpolant(current.start.value);
     } else if (current.interpolant === 'linear') {
-      current.interpolate = linearInterpolant(current.time, current.value, next.time, next.value);
+      current.interpolate = linearInterpolant(current.start.time, current.start.value, next.start.time, next.start.value);
     } else if (current.interpolant === 'quadratic') {
-      current.interpolate = quadraticInterpolant(current.time, current.value, current.control.time, current.control.value, next.time, next.value);
+      current.interpolate = quadraticInterpolant(current.start.time, current.start.value, current.control.time, current.control.value, next.start.time, next.start.value);
     } else {
       console.log("boo");
     }
@@ -168,10 +186,10 @@ function effectToSamples(effect) {
     const t = sampleIndex / (nsamples - 1);
 
     // Advance to next pieces as needed.
-    if (t > effect.frequencies[frequencyIndex + 1].time) {
+    if (t > effect.frequencies[frequencyIndex + 1].start.time) {
       frequencyIndex += 1;
     }
-    if (t > effect.amplitudes[amplitudeIndex + 1].time) {
+    if (t > effect.amplitudes[amplitudeIndex + 1].start.time) {
       amplitudeIndex += 1;
     }
 
@@ -181,8 +199,8 @@ function effectToSamples(effect) {
     const amplitudeB = effect.amplitudes[amplitudeIndex + 1];
 
     // Interpolate.
-    const frequencyT = (t - frequencyA.time) / (frequencyB.time - frequencyA.time);
-    const amplitudeT = (t - amplitudeA.time) / (amplitudeB.time - amplitudeA.time);
+    const frequencyT = (t - frequencyA.start.time) / (frequencyB.start.time - frequencyA.start.time);
+    const amplitudeT = (t - amplitudeA.start.time) / (amplitudeB.start.time - amplitudeA.start.time);
     const frequency = frequencyA.interpolate(t);
     const amplitude = amplitudeA.interpolate(t);
 
@@ -212,8 +230,8 @@ const effect = {
     // {time: 0.75, value: 3000, interpolant: 'linear'},
     // {time: 1, value: 0 },
 
-    {name: 'whoop', time: 0, value: 880, control: {time: 0.5, value: 3000}, interpolant: 'quadratic'},
-    {name: 'end', time: 1, value: 200},
+    {name: 'whoop', start: {time: 0, value: 880}, interpolant: Interpolant.Quadratic, control: {time: 0.5, value: 3000}},
+    {name: 'end', start: {time: 1, value: 200}, interpolant: Interpolant.Constant},
 
     // [0, 880],
     // [0.5, 880],
@@ -226,8 +244,8 @@ const effect = {
     // {time: 0.5, value: 1, interpolant: 'linear'},
     // {time: 1, value: 0 },
 
-    {name: 'start', time: 0, value: 1, interpolant: 'constant'},
-    {name: 'end', time: 1, value: 1 },
+    {name: 'start', start: {time: 0, value: 1}, interpolant: Interpolant.Constant},
+    {name: 'end', start: {time: 1, value: 1}, interpolant: Interpolant.Constant},
 
     // [0, 0],
     // [0.1, 1],
@@ -242,21 +260,41 @@ function generateWav() {
   player.src = wav;
 }
 
-function initialize() {
+function hookElements() {
   durationInput = document.getElementById('duration-input');
   waveTypePicker = document.getElementById('wave-type-picker');
   dutyCycleLabel = document.getElementById('duty-cycle-label');
   dutyCycleInput = document.getElementById('duty-cycle-input');
+  interpolantPicker = document.getElementById('interpolant-picker');
+  piecePicker = document.getElementById('piece-picker');
+  pieceNameInput = document.getElementById('piece-name-input');
+  startTimeInput = document.getElementById('start-time-input');
+  startValueInput = document.getElementById('start-value-input');
+  controlTimeLabel = document.getElementById('control-time-label');
+  controlTimeInput = document.getElementById('control-time-input');
+  controlValueLabel = document.getElementById('control-value-label');
+  controlValueInput = document.getElementById('control-value-input');
   player = document.getElementById('player');
+}
+
+function initialize() {
+  hookElements();
 
   for (let type of Object.keys(Wave)) {
     let option = document.createElement('option');
-    option.value = type;
-    option.textContent = type.toLowerCase();
+    option.value = Wave[type];
+    option.textContent = Wave[type];
     waveTypePicker.appendChild(option);
   }
 
-  const registerFloatListener = (input, key) => {
+  for (let type of Object.keys(Interpolant)) {
+    let option = document.createElement('option');
+    option.value = Interpolant[type];
+    option.textContent = Interpolant[type];
+    interpolantPicker.appendChild(option);
+  }
+
+  const registerEffectFloatListener = (input, key) => {
     input.addEventListener('input', () => {
       if (input.value.match(/^\d+(\.\d+)?$/)) {
         effect[key] = parseFloat(input.value);
@@ -267,18 +305,52 @@ function initialize() {
     });
   };
 
-  registerFloatListener(durationInput, 'duration');
-  registerFloatListener(dutyCycleInput, 'dutyCycle');
+  const registerPieceFloatListener = (host, input, key) => {
+    input.addEventListener('input', () => {
+      if (input.value.match(/^\d+(\.\d+)?$/)) {
+        currentPiece[host][key] = parseFloat(input.value);
+        input.classList.remove('error');
+      } else {
+        input.classList.add('error');
+      }
+    });
+  };
 
-  waveTypePicker.addEventListener('change', event => {
+  registerEffectFloatListener(durationInput, 'duration');
+  registerEffectFloatListener(dutyCycleInput, 'dutyCycle');
+
+  waveTypePicker.addEventListener('change', () => {
     effect.waveType = waveTypePicker.value;
     syncWaveOptions();
   });
 
+  piecePicker.addEventListener('change', () => {
+    const index = parseInt(piecePicker.value.substring(2));
+    if (piecePicker.value.charAt(0) === 'f') {
+      loadPiece(effect.frequencies[index]);
+    } else {
+      loadPiece(effect.amplitudes[index]);
+    }
+  });
+
+  interpolantPicker.addEventListener('change', () => {
+    currentPiece.interpolant = interpolantPicker.value;
+    loadPiece(currentPiece);
+  });
+
+  pieceNameInput.addEventListener('input', () => {
+    currentPiece.name = pieceNameInput.value;
+  });
+
+  registerPieceFloatListener('start', startTimeInput, 'time');
+  registerPieceFloatListener('start', startValueInput, 'value');
+  registerPieceFloatListener('control', controlTimeInput, 'time');
+  registerPieceFloatListener('control', controlValueInput, 'value');
+
   const generateWavButton = document.getElementById('generate-wav-button');
   generateWavButton.addEventListener('click', generateWav);
 
-  load(effect);
+  loadEffect(effect);
 }
 
 function syncWaveOptions() {
@@ -292,10 +364,52 @@ function syncWaveOptions() {
   }
 }
 
-function load(effect) {
+function loadEffect(effect) {
   durationInput.value = effect.duration;
   waveTypePicker.value = effect.waveType;
   syncWaveOptions();
+
+  while (piecePicker.firstChild) {
+    piecePicker.removeChild(piecePicker.lastChild);
+  }
+
+  for (let [i, frequencyPiece] of effect.frequencies.entries()) {
+    let option = document.createElement('option');
+    option.value = `f:${i}`;
+    option.textContent = `frequency ${i}: ${frequencyPiece.name}`;
+    piecePicker.appendChild(option);
+  }
+
+  for (let [i, amplitudePiece] of effect.amplitudes.entries()) {
+    let option = document.createElement('option');
+    option.value = `a:${i}`;
+    option.textContent = `amplitude ${i}: ${amplitudePiece.name}`;
+    piecePicker.appendChild(option);
+  }
+
+  loadPiece(effect.frequencies[0]);
+}
+
+function loadPiece(piece) {
+  currentPiece = piece;
+
+  pieceNameInput.value = piece.name;
+  startTimeInput.value = piece.start.time;
+  startValueInput.value = piece.start.value;
+  interpolantPicker.value = piece.interpolant;
+  if (piece.interpolant === Interpolant.Quadratic) {
+    controlTimeInput.style.display = 'inline';
+    controlValueInput.style.display = 'inline';
+    controlTimeLabel.style.display = 'inline';
+    controlValueLabel.style.display = 'inline';
+    controlTimeInput.value = piece.control.time;
+    controlValueInput.value = piece.control.value;
+  } else {
+    controlTimeInput.style.display = 'none';
+    controlValueInput.style.display = 'none';
+    controlTimeLabel.style.display = 'none';
+    controlValueLabel.style.display = 'none';
+  }
 }
 
 document.addEventListener('DOMContentLoaded', initialize);
