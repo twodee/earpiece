@@ -30,6 +30,9 @@ let controlTimeInput;
 let controlValueLabel;
 let controlValueInput;
 
+let canvases = [];
+let contexts;
+
 let currentPiece;
 
 // --------------------------------------------------------------------------- 
@@ -275,10 +278,40 @@ function hookElements() {
   controlValueLabel = document.getElementById('control-value-label');
   controlValueInput = document.getElementById('control-value-input');
   player = document.getElementById('player');
+
+  canvases.push(document.getElementById('frequency-canvas'));
+  canvases.push(document.getElementById('amplitude-canvas'));
+}
+
+function resize() {
+  for (let canvas of canvases) {
+    const realWidth = canvas.clientWidth;
+    const realHeight = canvas.clientHeight;
+    if (realWidth !== canvas.width || realHeight != canvas.height) {
+      canvas.width = realWidth;
+      canvas.height = realHeight;
+    }
+  }
+
+  window.requestAnimationFrame(renderCanvases);
+}
+
+function renderCanvas(canvas, context, pieces) {
+  context.clearRect(0, 0, canvas.width, canvas.height);
+
+  context.fillStyle = 'rgb(0, 0, 0)';
+  context.fillRect(0, 0, 10, 10);
+}
+
+function renderCanvases() {
+  renderCanvas(canvases[0], contexts[0], effect.frequency);
+  renderCanvas(canvases[1], contexts[1], effect.amplitude);
 }
 
 function initialize() {
   hookElements();
+
+  contexts = canvases.map(canvas => canvas.getContext('2d'));
 
   for (let type of Object.keys(Wave)) {
     let option = document.createElement('option');
@@ -351,6 +384,9 @@ function initialize() {
   generateWavButton.addEventListener('click', generateWav);
 
   loadEffect(effect);
+
+  window.addEventListener('resize', resize);
+  resize();
 }
 
 function syncWaveOptions() {
