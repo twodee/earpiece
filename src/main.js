@@ -233,7 +233,7 @@ const effect = {
     // {time: 0.75, value: 3000, interpolant: 'linear'},
     // {time: 1, value: 0 },
 
-    {name: 'whoop', start: {time: 0, value: 880}, interpolant: Interpolant.Quadratic, control: {time: 0.5, value: 3000}},
+    {name: 'whoop', start: {time: 0, value: 880}, interpolant: Interpolant.Linear, control: {time: 0.5, value: 3000}},
     {name: 'end', start: {time: 1, value: 200}, interpolant: Interpolant.Constant},
 
     // [0, 880],
@@ -247,7 +247,8 @@ const effect = {
     // {time: 0.5, value: 1, interpolant: 'linear'},
     // {time: 1, value: 0 },
 
-    {name: 'start', start: {time: 0, value: 1}, interpolant: Interpolant.Constant},
+    {name: 'start', start: {time: 0, value: 0.1}, interpolant: Interpolant.Constant},
+    {name: 'mid', start: {time: 0.5, value: 0.5}, interpolant: Interpolant.Linear},
     {name: 'end', start: {time: 1, value: 1}, interpolant: Interpolant.Constant},
 
     // [0, 0],
@@ -287,7 +288,7 @@ function resize() {
   for (let canvas of canvases) {
     const realWidth = canvas.clientWidth;
     const realHeight = canvas.clientHeight;
-    if (realWidth !== canvas.width || realHeight != canvas.height) {
+    if (realWidth !== canvas.width || realHeight !== canvas.height) {
       canvas.width = realWidth;
       canvas.height = realHeight;
     }
@@ -296,16 +297,43 @@ function resize() {
   window.requestAnimationFrame(renderCanvases);
 }
 
-function renderCanvas(canvas, context, pieces) {
+function renderCanvas(canvas, context, pieces, maximumY) {
   context.clearRect(0, 0, canvas.width, canvas.height);
 
-  context.fillStyle = 'rgb(0, 0, 0)';
-  context.fillRect(0, 0, 10, 10);
+  const gap = 10;
+  const plotWidth = canvas.width - 2 * gap;
+  const plotHeight = canvas.height - 2 * gap;
+
+  // context.fillStyle = 'rgb(0, 0, 0)';
+  // context.fillRect(0, 0, 10, 10);
+
+  context.lineWidth = 0.4;
+  context.strokeStyle = 'black';
+  context.strokeRect(gap, gap, plotWidth, plotHeight);
+
+  context.lineWidth = 1;
+  context.strokeStyle = 'red';
+  for (let i = 0; i < pieces.length - 1; ++i) {
+    const curr = pieces[i];
+    const next = pieces[i + 1];
+
+    if (curr.interpolant === Interpolant.Linear) {
+      context.beginPath();
+      context.moveTo(gap + plotWidth * curr.start.time, canvas.height - (gap + plotHeight * (curr.start.value / maximumY)));
+      context.lineTo(gap + plotWidth * next.start.time, canvas.height - (gap + plotHeight * (next.start.value / maximumY)));
+      context.stroke();
+    } else if (curr.interpolant === Interpolant.Constant) {
+      context.beginPath();
+      context.moveTo(gap + plotWidth * curr.start.time, canvas.height - (gap + plotHeight * (curr.start.value / maximumY)));
+      context.lineTo(gap + plotWidth * next.start.time, canvas.height - (gap + plotHeight * (curr.start.value / maximumY)));
+      context.stroke();
+    }
+  }
 }
 
 function renderCanvases() {
-  renderCanvas(canvases[0], contexts[0], effect.frequency);
-  renderCanvas(canvases[1], contexts[1], effect.amplitude);
+  renderCanvas(canvases[0], contexts[0], effect.frequencies, effect.frequencies.reduce((accumulator, piece) => Math.max(accumulator, piece.start.value), 1000));
+  renderCanvas(canvases[1], contexts[1], effect.amplitudes, 1);
 }
 
 function initialize() {
@@ -331,6 +359,7 @@ function initialize() {
     input.addEventListener('input', () => {
       if (input.value.match(/^\d+(\.\d+)?$/)) {
         effect[key] = parseFloat(input.value);
+        renderCanvases();
         input.classList.remove('error');
       } else {
         input.classList.add('error');
@@ -342,6 +371,7 @@ function initialize() {
     input.addEventListener('input', () => {
       if (input.value.match(/^\d+(\.\d+)?$/)) {
         currentPiece[host][key] = parseFloat(input.value);
+        renderCanvases();
         input.classList.remove('error');
       } else {
         input.classList.add('error');
@@ -355,6 +385,7 @@ function initialize() {
   waveTypePicker.addEventListener('change', () => {
     effect.waveType = waveTypePicker.value;
     syncWaveOptions();
+    renderCanvases();
   });
 
   piecePicker.addEventListener('change', () => {
@@ -446,6 +477,8 @@ function loadPiece(piece) {
     controlTimeLabel.style.display = 'none';
     controlValueLabel.style.display = 'none';
   }
+
+  renderCanvases();
 }
 
 document.addEventListener('DOMContentLoaded', initialize);
