@@ -33,7 +33,7 @@ let controlValueInput;
 let canvases = [];
 let contexts;
 
-let currentPiece;
+let selectedPiece;
 
 // --------------------------------------------------------------------------- 
 
@@ -233,7 +233,7 @@ const effect = {
     // {time: 0.75, value: 3000, interpolant: 'linear'},
     // {time: 1, value: 0 },
 
-    {name: 'whoop', start: {time: 0, value: 880}, interpolant: Interpolant.Linear, control: {time: 0.5, value: 3000}},
+    {name: 'whoop', start: {time: 0, value: 880}, interpolant: Interpolant.Quadratic, control: {time: 0.5, value: 3000}},
     {name: 'end', start: {time: 1, value: 200}, interpolant: Interpolant.Constant},
 
     // [0, 880],
@@ -304,8 +304,8 @@ function renderCanvas(canvas, context, pieces, maximumY) {
   const plotWidth = canvas.width - 2 * gap;
   const plotHeight = canvas.height - 2 * gap;
 
-  // context.fillStyle = 'rgb(0, 0, 0)';
-  // context.fillRect(0, 0, 10, 10);
+  const xify = x => gap + plotWidth * x;
+  const yify = y => canvas.height - (gap + plotHeight * (y / maximumY));
 
   context.lineWidth = 0.4;
   context.strokeStyle = 'black';
@@ -317,29 +317,81 @@ function renderCanvas(canvas, context, pieces, maximumY) {
     const curr = pieces[i];
     const next = pieces[i + 1];
 
+    context.lineWidth = curr === selectedPiece ? 2 : 0.4;
+
     if (curr.interpolant === Interpolant.Linear) {
       context.beginPath();
-      context.moveTo(gap + plotWidth * curr.start.time, canvas.height - (gap + plotHeight * (curr.start.value / maximumY)));
-      context.lineTo(gap + plotWidth * next.start.time, canvas.height - (gap + plotHeight * (next.start.value / maximumY)));
+      context.moveTo(xify(curr.start.time), yify(curr.start.value));
+      context.lineTo(xify(next.start.time), yify(next.start.value));
       context.stroke();
     } else if (curr.interpolant === Interpolant.Constant) {
       context.beginPath();
-      context.moveTo(gap + plotWidth * curr.start.time, canvas.height - (gap + plotHeight * (curr.start.value / maximumY)));
-      context.lineTo(gap + plotWidth * next.start.time, canvas.height - (gap + plotHeight * (curr.start.value / maximumY)));
+      context.moveTo(xify(curr.start.time), yify(curr.start.value));
+      context.lineTo(xify(next.start.time), yify(curr.start.value));
+      context.stroke();
+    } else if (curr.interpolant === Interpolant.Quadratic) {
+      context.beginPath();
+      context.moveTo(xify(curr.start.time), yify(curr.start.value));
+      const interpolator = quadraticInterpolant(curr.start.time, curr.start.value, curr.control.time, curr.control.value, next.start.time, next.start.value);
+      const deltaT = 1 / plotWidth;
+      for (let t = curr.start.time; t < next.start.time; t += deltaT) {
+        context.lineTo(xify(t), yify(interpolator(t)));
+      }
       context.stroke();
     }
+  }
+
+  context.fillStyle = 'rgb(0, 0, 0)';
+  for (let piece of pieces) {
+    context.beginPath();
+    context.arc(xify(piece.start.time), yify(piece.start.value), 5, 0, 2 * Math.PI);
+    context.fill();
   }
 }
 
 function renderCanvases() {
-  renderCanvas(canvases[0], contexts[0], effect.frequencies, effect.frequencies.reduce((accumulator, piece) => Math.max(accumulator, piece.start.value), 1000));
+  renderCanvas(canvases[0], contexts[0], effect.frequencies, effect.frequencies.reduce((accumulator, piece) => {
+    let max = Math.max(accumulator, piece.start.value);
+    if (piece.interpolant === Interpolant.Quadratic) {
+      max = Math.max(max, piece.control.value);
+    }
+    return max;
+  }, 1000));
   renderCanvas(canvases[1], contexts[1], effect.amplitudes, 1);
+}
+
+function getMouseMoveListener(canvas, pieces) {
+  return event => {
+
+    const gap = 10;
+    const plotWidth = canvas.width - 2 * gap;
+    const plotHeight = canvas.height - 2 * gap;
+    const xify = x => gap + plotWidth * x;
+    const yify = y => canvas.height - (gap + plotHeight * (y / maximumY));
+
+    const mouseX = event.clientX;
+    const mouseY = event.clientY;
+
+    const plotX = (mouseX - gap) / plotWidth;
+    const plotY = 1.0 - (mouseY - gap) / plotHeight;
+
+    const isNear = pieces.some(piece => {
+      const deltaX = plotX - piece.start.time;
+      const deltaY = 0;
+      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+      return distance <= 5 / canvas.width;
+    });
+
+    document.documentElement.classList.toggle('cursor-grab', isNear);
+  };
 }
 
 function initialize() {
   hookElements();
-
   contexts = canvases.map(canvas => canvas.getContext('2d'));
+
+  canvases[0].addEventListener('mousemove', getMouseMoveListener(canvases[0], effect.frequencies));
+  canvases[1].addEventListener('mousemove', getMouseMoveListener(canvases[1], effect.amplitudes));
 
   for (let type of Object.keys(Wave)) {
     let option = document.createElement('option');
@@ -370,7 +422,7 @@ function initialize() {
   const registerPieceFloatListener = (host, input, key) => {
     input.addEventListener('input', () => {
       if (input.value.match(/^\d+(\.\d+)?$/)) {
-        currentPiece[host][key] = parseFloat(input.value);
+        selectedPiece[host][key] = parseFloat(input.value);
         renderCanvases();
         input.classList.remove('error');
       } else {
@@ -398,12 +450,12 @@ function initialize() {
   });
 
   interpolantPicker.addEventListener('change', () => {
-    currentPiece.interpolant = interpolantPicker.value;
-    loadPiece(currentPiece);
+    selectedPiece.interpolant = interpolantPicker.value;
+    loadPiece(selectedPiece);
   });
 
   pieceNameInput.addEventListener('input', () => {
-    currentPiece.name = pieceNameInput.value;
+    selectedPiece.name = pieceNameInput.value;
   });
 
   registerPieceFloatListener('start', startTimeInput, 'time');
@@ -458,7 +510,7 @@ function loadEffect(effect) {
 }
 
 function loadPiece(piece) {
-  currentPiece = piece;
+  selectedPiece = piece;
 
   pieceNameInput.value = piece.name;
   startTimeInput.value = piece.start.time;

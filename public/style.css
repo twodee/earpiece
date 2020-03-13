@@ -101,3 +101,11 @@ body {
 #duty-cycle-label, #duty-cycle-input {
   display: none;
 }
+
+html.cursor-grab {
+  cursor: grab;
+}
+
+html.cursor-grabbing {
+  cursor: grabbing;
+}
