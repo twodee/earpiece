@@ -41,6 +41,7 @@ body {
 }
 
 #right {
+  user-select: none;
   flex: 0 0 auto;
   display: grid;
   grid-template-columns: 120px auto;

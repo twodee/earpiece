@@ -1,5 +1,9 @@
 // http://soundfile.sapp.org/doc/WaveFormat
 
+Number.prototype.toShortFloat = function() {
+  return parseFloat(this.toLocaleString('fullwide', {useGrouping: false, maximumFractionDigits: 3}));
+}
+
 const Wave = Object.freeze({
   Sine: 'sine',
   Triangle: 'triangle',
@@ -410,6 +414,39 @@ class Plot {
     }
   };
 
+  getPredecessorHandle(pieceIndex, handle) {
+    const piece = this.pieces[pieceIndex];
+    if (piece.interpolant === Interpolant.Quadratic && handle === piece.control) {
+      return piece.start;
+    } else if (pieceIndex > 0) {
+      const predecessor = this.pieces[pieceIndex - 1];
+      if (predecessor.interpolant === Interpolant.Quadratic) {
+        return predecessor.control;
+      } else {
+        return predecessor.start;
+      }
+    } else {
+      return null;
+    }
+  }
+
+  getSuccessorHandle(pieceIndex, handle) {
+    const piece = this.pieces[pieceIndex];
+    if (piece.interpolant === Interpolant.Quadratic) {
+      if (handle === piece.start) {
+        return piece.control;
+      } else if (pieceIndex < this.pieces.length - 1) {
+        return this.pieces[pieceIndex + 1].start;
+      } else {
+        return null;
+      }
+    } else if (pieceIndex < this.pieces.length - 1) {
+      return this.pieces[pieceIndex + 1].start;
+    } else {
+      return null;
+    }
+  }
+
   onMouseMove = event => {
     const bounds = this.canvas.getBoundingClientRect();
     const mouseAt = [
@@ -418,24 +455,22 @@ class Plot {
     ];
 
     if (this.dragPiece) {
-      const time = this.pixelToTime(mouseAt[0]);
-      const value = this.pixelToValue(mouseAt[1]);
+      const time = this.pixelToTime(mouseAt[0]).toShortFloat();
+      const value = this.pixelToValue(mouseAt[1]).toShortFloat();
 
       // Don't allow first and last pieces to have their start time moved.
       if ((this.dragIndex > 0 && this.dragIndex < this.pieces.length - 1) || this.dragHandle !== this.dragPiece.start) {
-        this.dragHandle.time = time;
+
+        const predecessor = this.getPredecessorHandle(this.dragIndex, this.dragHandle);
+        const successor = this.getSuccessorHandle(this.dragIndex, this.dragHandle);
+        if (predecessor.time < time && time < successor.time) {
+          this.dragHandle.time = time;
+        }
       }
 
       this.dragHandle.value = Math.max(0, Math.min(value, this.maximumValue));
 
-      if (this.dragPiece.start === this.dragHandle) {
-        startTimeInput.value = this.dragHandle.time;
-        startValueInput.value = this.dragHandle.value;
-      } else if (this.dragPiece.interpolant === Interpolant.Quadratic && this.dragPiece.control === this.dragHandle) {
-        controlTimeInput.value = this.dragHandle.time;
-        controlValueInput.value = this.dragHandle.value;
-      }
-
+      synchronizePieceInputs(this.dragPiece);
       this.render();
     } else {
       const isNear = this.pieces.some(piece => {
@@ -549,6 +584,7 @@ function initialize() {
     input.addEventListener('input', () => {
       if (input.value.match(/^\d+(\.\d+)?$/)) {
         effect[key] = parseFloat(input.value);
+        synchronizePieceInputs(selectedPiece);
         renderPlots();
         input.classList.remove('error');
       } else {
@@ -649,20 +685,27 @@ function loadEffect(effect) {
   loadPiece(effect.frequencies[0]);
 }
 
+function synchronizePieceInputs(piece) {
+  startTimeInput.value = piece.start.time * effect.duration;
+  startValueInput.value = piece.start.value;
+  if (piece.interpolant === Interpolant.Quadratic) {
+    controlTimeInput.value = piece.control.time * effect.duration;
+    controlValueInput.value = piece.control.value;
+  }
+}
+
 function loadPiece(piece) {
   selectedPiece = piece;
 
   pieceNameInput.value = piece.name;
-  startTimeInput.value = piece.start.time;
-  startValueInput.value = piece.start.value;
   interpolantPicker.value = piece.interpolant;
+  synchronizePieceInputs(piece);
+
   if (piece.interpolant === Interpolant.Quadratic) {
     controlTimeInput.style.display = 'inline';
     controlValueInput.style.display = 'inline';
     controlTimeLabel.style.display = 'inline';
     controlValueLabel.style.display = 'inline';
-    controlTimeInput.value = piece.control.time;
-    controlValueInput.value = piece.control.value;
   } else {
     controlTimeInput.style.display = 'none';
     controlValueInput.style.display = 'none';
