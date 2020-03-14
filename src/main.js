@@ -31,7 +31,6 @@ let controlValueLabel;
 let controlValueInput;
 
 let canvases = [];
-let contexts;
 
 let selectedPiece;
 
@@ -285,113 +284,158 @@ function hookElements() {
 }
 
 function resize() {
-  for (let canvas of canvases) {
-    const realWidth = canvas.clientWidth;
-    const realHeight = canvas.clientHeight;
-    if (realWidth !== canvas.width || realHeight !== canvas.height) {
-      canvas.width = realWidth;
-      canvas.height = realHeight;
-    }
+  for (let plot of plots) {
+    plot.updateSize();
   }
-
-  window.requestAnimationFrame(renderCanvases);
+  window.requestAnimationFrame(renderPlots);
 }
 
-function renderCanvas(canvas, context, pieces, maximumY) {
-  context.clearRect(0, 0, canvas.width, canvas.height);
+function renderPlots() {
+  for (let plot of plots) {
+    plot.render();
+  }
+}
 
-  const gap = 10;
-  const plotWidth = canvas.width - 2 * gap;
-  const plotHeight = canvas.height - 2 * gap;
+// --------------------------------------------------------------------------- 
 
-  const xify = x => gap + plotWidth * x;
-  const yify = y => canvas.height - (gap + plotHeight * (y / maximumY));
+class Plot {
+  constructor(canvas, pieces, minimumMaximumValue, piecePrefix) {
+    this.canvas = canvas;
+    this.pieces = pieces;
+    this.minimumMaximumValue = minimumMaximumValue;
+    this.maximumValue = null;
+    this.width = null;
+    this.height = null;
+    this.context = this.canvas.getContext('2d');
+    this.piecePrefix = piecePrefix;
 
-  context.lineWidth = 0.4;
-  context.strokeStyle = 'black';
-  context.strokeRect(gap, gap, plotWidth, plotHeight);
+    this.canvas.addEventListener('mousemove', this.onMouseMove.bind(this));
+    this.canvas.addEventListener('click', this.onMouseClick.bind(this));
 
-  context.lineWidth = 1;
-  context.strokeStyle = 'red';
-  for (let i = 0; i < pieces.length - 1; ++i) {
-    const curr = pieces[i];
-    const next = pieces[i + 1];
+    this.updateBounds();
+  }
 
-    context.lineWidth = curr === selectedPiece ? 2 : 0.4;
+  timeToPixel(t) {
+    return Plot.gap + this.width * t;
+  }
 
-    if (curr.interpolant === Interpolant.Linear) {
-      context.beginPath();
-      context.moveTo(xify(curr.start.time), yify(curr.start.value));
-      context.lineTo(xify(next.start.time), yify(next.start.value));
-      context.stroke();
-    } else if (curr.interpolant === Interpolant.Constant) {
-      context.beginPath();
-      context.moveTo(xify(curr.start.time), yify(curr.start.value));
-      context.lineTo(xify(next.start.time), yify(curr.start.value));
-      context.stroke();
-    } else if (curr.interpolant === Interpolant.Quadratic) {
-      context.beginPath();
-      context.moveTo(xify(curr.start.time), yify(curr.start.value));
-      const interpolator = quadraticInterpolant(curr.start.time, curr.start.value, curr.control.time, curr.control.value, next.start.time, next.start.value);
-      const deltaT = 1 / plotWidth;
-      for (let t = curr.start.time; t < next.start.time; t += deltaT) {
-        context.lineTo(xify(t), yify(interpolator(t)));
+  pixelToTime(x) {
+    return (x - Plot.gap) / this.width;
+  }
+
+  valueToPixel(value) {
+    return this.canvas.height - (Plot.gap + this.height * (value / this.maximumValue));
+  }
+
+  updateBounds() {
+    this.maximumValue = this.pieces.reduce((accumulator, piece) => {
+      let max = Math.max(accumulator, piece.start.value);
+      if (piece.interpolant === Interpolant.Quadratic) {
+        max = Math.max(max, piece.control.value);
       }
-      context.stroke();
+      return max;
+    }, this.minimumMaximumValue);
+  }
+
+  onMouseClick(event) {
+    const t = this.pixelToTime(event.clientX);
+    for (let i = 0; i < this.pieces.length - 1; ++i) {
+      if (this.pieces[i].start.time <= t && t < this.pieces[i + 1].start.time) {
+        selectedPiece = this.pieces[i];
+        piecePicker.value = `${this.piecePrefix}:${i}`;
+        loadPiece(selectedPiece);
+        renderPlots();
+        break;
+      }
     }
   }
 
-  context.fillStyle = 'rgb(0, 0, 0)';
-  for (let piece of pieces) {
-    context.beginPath();
-    context.arc(xify(piece.start.time), yify(piece.start.value), 5, 0, 2 * Math.PI);
-    context.fill();
-  }
-}
-
-function renderCanvases() {
-  renderCanvas(canvases[0], contexts[0], effect.frequencies, effect.frequencies.reduce((accumulator, piece) => {
-    let max = Math.max(accumulator, piece.start.value);
-    if (piece.interpolant === Interpolant.Quadratic) {
-      max = Math.max(max, piece.control.value);
-    }
-    return max;
-  }, 1000));
-  renderCanvas(canvases[1], contexts[1], effect.amplitudes, 1);
-}
-
-function getMouseMoveListener(canvas, pieces) {
-  return event => {
-
-    const gap = 10;
-    const plotWidth = canvas.width - 2 * gap;
-    const plotHeight = canvas.height - 2 * gap;
-    const xify = x => gap + plotWidth * x;
-    const yify = y => canvas.height - (gap + plotHeight * (y / maximumY));
-
+  onMouseMove(event) {
     const mouseX = event.clientX;
     const mouseY = event.clientY;
 
-    const plotX = (mouseX - gap) / plotWidth;
-    const plotY = 1.0 - (mouseY - gap) / plotHeight;
+    const plotX = (mouseX - Plot.gap) / this.width;
+    const plotY = 1.0 - (mouseY - Plot.gap) / this.height;
 
-    const isNear = pieces.some(piece => {
+    const isNear = this.pieces.some(piece => {
       const deltaX = plotX - piece.start.time;
       const deltaY = 0;
       const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-      return distance <= 5 / canvas.width;
+      return distance <= 5 / this.canvas.width;
     });
 
     document.documentElement.classList.toggle('cursor-grab', isNear);
-  };
+  }
+
+  updateSize() {
+    const realWidth = this.canvas.clientWidth;
+    const realHeight = this.canvas.clientHeight;
+    if (realWidth !== this.canvas.width || realHeight !== this.canvas.height) {
+      this.canvas.width = realWidth;
+      this.canvas.height = realHeight;
+      this.width = this.canvas.width - 2 * Plot.gap;
+      this.height = this.canvas.height - 2 * Plot.gap;
+    }
+  }
+
+  render() {
+    this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+    this.context.lineWidth = 0.4;
+    this.context.strokeStyle = 'black';
+    this.context.strokeRect(Plot.gap, Plot.gap, this.width, this.height);
+
+    this.context.lineWidth = 1;
+    this.context.strokeStyle = 'red';
+
+    for (let i = 0; i < this.pieces.length - 1; ++i) {
+      const curr = this.pieces[i];
+      const next = this.pieces[i + 1];
+
+      this.context.lineWidth = curr === selectedPiece ? 2 : 0.4;
+
+      if (curr.interpolant === Interpolant.Linear) {
+        this.context.beginPath();
+        this.context.moveTo(this.timeToPixel(curr.start.time), this.valueToPixel(curr.start.value));
+        this.context.lineTo(this.timeToPixel(next.start.time), this.valueToPixel(next.start.value));
+        this.context.stroke();
+      } else if (curr.interpolant === Interpolant.Constant) {
+        this.context.beginPath();
+        this.context.moveTo(this.timeToPixel(curr.start.time), this.valueToPixel(curr.start.value));
+        this.context.lineTo(this.timeToPixel(next.start.time), this.valueToPixel(curr.start.value));
+        this.context.stroke();
+      } else if (curr.interpolant === Interpolant.Quadratic) {
+        this.context.beginPath();
+        this.context.moveTo(this.timeToPixel(curr.start.time), this.valueToPixel(curr.start.value));
+        const interpolator = quadraticInterpolant(curr.start.time, curr.start.value, curr.control.time, curr.control.value, next.start.time, next.start.value);
+        const deltaT = 1 / this.width;
+        for (let t = curr.start.time; t < next.start.time; t += deltaT) {
+          this.context.lineTo(this.timeToPixel(t), this.valueToPixel(interpolator(t)));
+        }
+        this.context.stroke();
+      }
+    }
+
+    this.context.fillStyle = 'rgb(0, 0, 0)';
+    for (let piece of this.pieces) {
+      this.context.beginPath();
+      this.context.arc(this.timeToPixel(piece.start.time), this.valueToPixel(piece.start.value), 5, 0, 2 * Math.PI);
+      this.context.fill();
+    }
+  }
 }
+
+Plot.gap = 10;
+
+// --------------------------------------------------------------------------- 
 
 function initialize() {
   hookElements();
-  contexts = canvases.map(canvas => canvas.getContext('2d'));
 
-  canvases[0].addEventListener('mousemove', getMouseMoveListener(canvases[0], effect.frequencies));
-  canvases[1].addEventListener('mousemove', getMouseMoveListener(canvases[1], effect.amplitudes));
+  plots = [
+    new Plot(canvases[0], effect.frequencies, 1000, 'f'),
+    new Plot(canvases[1], effect.amplitudes, 1, 'a'),
+  ];
 
   for (let type of Object.keys(Wave)) {
     let option = document.createElement('option');
@@ -411,7 +455,7 @@ function initialize() {
     input.addEventListener('input', () => {
       if (input.value.match(/^\d+(\.\d+)?$/)) {
         effect[key] = parseFloat(input.value);
-        renderCanvases();
+        renderPlots();
         input.classList.remove('error');
       } else {
         input.classList.add('error');
@@ -423,7 +467,9 @@ function initialize() {
     input.addEventListener('input', () => {
       if (input.value.match(/^\d+(\.\d+)?$/)) {
         selectedPiece[host][key] = parseFloat(input.value);
-        renderCanvases();
+        plots[0].updateBounds();
+        plots[1].updateBounds();
+        renderPlots();
         input.classList.remove('error');
       } else {
         input.classList.add('error');
@@ -437,7 +483,7 @@ function initialize() {
   waveTypePicker.addEventListener('change', () => {
     effect.waveType = waveTypePicker.value;
     syncWaveOptions();
-    renderCanvases();
+    renderPlots();
   });
 
   piecePicker.addEventListener('change', () => {
@@ -530,7 +576,7 @@ function loadPiece(piece) {
     controlValueLabel.style.display = 'none';
   }
 
-  renderCanvases();
+  renderPlots();
 }
 
 document.addEventListener('DOMContentLoaded', initialize);
