@@ -299,6 +299,8 @@ function renderPlots() {
 // --------------------------------------------------------------------------- 
 
 class Plot {
+  static gap = 10;
+
   constructor(canvas, pieces, minimumMaximumValue, piecePrefix) {
     this.canvas = canvas;
     this.pieces = pieces;
@@ -309,9 +311,15 @@ class Plot {
     this.context = this.canvas.getContext('2d');
     this.piecePrefix = piecePrefix;
 
-    this.canvas.addEventListener('mousedown', this.onMouseDown.bind(this));
-    this.canvas.addEventListener('mousemove', this.onMouseMove.bind(this));
-    this.canvas.addEventListener('click', this.onMouseClick.bind(this));
+    this.canvas.addEventListener('mouseup', this.onMouseUp);
+    this.canvas.addEventListener('mousedown', this.onMouseDown);
+    this.canvas.addEventListener('mousemove', this.onMouseMove);
+    this.canvas.addEventListener('click', this.onMouseClick);
+
+    this.dragIndex = null;
+    this.dragPiece = null;
+    this.dragHandle = null;
+    this.mouseDown0 = null;
 
     this.updateBounds();
   }
@@ -328,6 +336,10 @@ class Plot {
     return this.canvas.height - (Plot.gap + this.height * (value / this.maximumValue));
   }
 
+  pixelToValue(y) {
+    return (this.canvas.height - y - Plot.gap) / this.height * this.maximumValue;
+  }
+
   updateBounds() {
     this.maximumValue = this.pieces.reduce((accumulator, piece) => {
       let max = Math.max(accumulator, piece.start.value);
@@ -338,50 +350,111 @@ class Plot {
     }, this.minimumMaximumValue);
   }
 
-  onMouseClick(event) {
-    const t = this.pixelToTime(event.clientX);
-    for (let i = 0; i < this.pieces.length - 1; ++i) {
-      if (this.pieces[i].start.time <= t && t < this.pieces[i + 1].start.time) {
-        selectedPiece = this.pieces[i];
-        piecePicker.value = `${this.piecePrefix}:${i}`;
-        loadPiece(selectedPiece);
-        renderPlots();
+  onMouseClick = event => {
+    const bounds = this.canvas.getBoundingClientRect();
+    const mouseAt = [
+      event.clientX - bounds.x,
+      event.clientY - bounds.y
+    ];
+    const delta = Math.abs(mouseAt[0] - this.mouseDownAt[0]) + Math.abs(mouseAt[1] - this.mouseDownAt[1]);
+
+    if (delta < 4) {
+      const t = this.pixelToTime(event.clientX);
+      for (let i = 0; i < this.pieces.length - 1; ++i) {
+        if (this.pieces[i].start.time <= t && t < this.pieces[i + 1].start.time) {
+          this.selectPiece(i);
+          break;
+        }
+      }
+    }
+  }
+
+  selectPiece(i) {
+    selectedPiece = this.pieces[i];
+    piecePicker.value = `${this.piecePrefix}:${i}`;
+    loadPiece(selectedPiece);
+    renderPlots();
+  }
+
+  onMouseDown = event => {
+    const bounds = this.canvas.getBoundingClientRect();
+    this.mouseDownAt = [
+      event.clientX - bounds.x,
+      event.clientY - bounds.y
+    ];
+
+    for (let [i, piece] of this.pieces.entries()) {
+      if (this.isNearHandle(this.mouseDownAt, piece.start.time, piece.start.value)) {
+        this.dragHandle = piece.start;
+      } else if (piece.interpolant === Interpolant.Quadratic && this.isNearHandle(this.mouseDownAt, piece.control.time, piece.control.value)) {
+        this.dragHandle = piece.control;
+      }
+
+      if (this.dragHandle) {
+        this.dragIndex = i;
+        this.dragPiece = piece;
+        document.documentElement.classList.remove('cursor-grab');
+        document.documentElement.classList.add('cursor-grabbing');
+        this.selectPiece(i);
         break;
       }
     }
-  }
+  };
 
-  onMouseDown(event) {
-    const bounds = this.canvas.getBoundingClientRect();
-    const mouseX = event.clientX - bounds.x;
-    const mouseY = event.clientY - bounds.y;
-    for (let piece of this.pieces) {
-      if (this.isNearVertex(mouseX, mouseY, piece.start.time, piece.start.value)) {
-        console.log("start");
-      } else if (piece.interpolant === Interpolant.Quadratic && this.isNearVertex(mouseX, mouseY, piece.control.time, piece.control.value)) {
-        console.log("control");
-      }
+  onMouseUp = event => {
+    if (this.dragPiece) {
+      document.documentElement.classList.remove('cursor-grabbing');
+      this.dragIndex = null;
+      this.dragPiece = null;
+      this.dragHandle = null;
     }
-  }
+  };
 
-  isNearVertex(mouseX, mouseY, time, value) {
+  onMouseMove = event => {
+    const bounds = this.canvas.getBoundingClientRect();
+    const mouseAt = [
+      event.clientX - bounds.x,
+      event.clientY - bounds.y
+    ];
+
+    if (this.dragPiece) {
+      const time = this.pixelToTime(mouseAt[0]);
+      const value = this.pixelToValue(mouseAt[1]);
+
+      // Don't allow first and last pieces to have their start time moved.
+      if ((this.dragIndex > 0 && this.dragIndex < this.pieces.length - 1) || this.dragHandle !== this.dragPiece.start) {
+        this.dragHandle.time = time;
+      }
+
+      this.dragHandle.value = Math.max(0, Math.min(value, this.maximumValue));
+
+      if (this.dragPiece.start === this.dragHandle) {
+        startTimeInput.value = this.dragHandle.time;
+        startValueInput.value = this.dragHandle.value;
+      } else if (this.dragPiece.interpolant === Interpolant.Quadratic && this.dragPiece.control === this.dragHandle) {
+        controlTimeInput.value = this.dragHandle.time;
+        controlValueInput.value = this.dragHandle.value;
+      }
+
+      this.render();
+    } else {
+      const isNear = this.pieces.some(piece => {
+        return (
+          this.isNearHandle(mouseAt, piece.start.time, piece.start.value) ||
+          (piece.interpolant === Interpolant.Quadratic && this.isNearHandle(mouseAt, piece.control.time, piece.control.value))
+        );
+      });
+      document.documentElement.classList.toggle('cursor-grab', isNear);
+    }
+  };
+
+  isNearHandle(mouseAt, time, value) {
     const x = this.timeToPixel(time);
     const y = this.valueToPixel(value);
-    const deltaX = x - mouseX;
-    const deltaY = y - mouseY;
+    const deltaX = x - mouseAt[0];
+    const deltaY = y - mouseAt[1];
     const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
     return distance <= 5;
-  }
-
-  onMouseMove(event) {
-    const bounds = this.canvas.getBoundingClientRect();
-    const mouseX = event.clientX - bounds.x;
-    const mouseY = event.clientY - bounds.y;
-    const isNear = this.pieces.some(piece => (
-      this.isNearVertex(mouseX, mouseY, piece.start.time, piece.start.value) ||
-      (piece.interpolant === Interpolant.Quadratic && this.isNearVertex(mouseX, mouseY, piece.control.time, piece.control.value))
-    ));
-    document.documentElement.classList.toggle('cursor-grab', isNear);
   }
 
   updateSize() {
@@ -447,8 +520,6 @@ class Plot {
     }
   }
 }
-
-Plot.gap = 10;
 
 // --------------------------------------------------------------------------- 
 
