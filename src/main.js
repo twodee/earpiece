@@ -350,20 +350,22 @@ class Plot {
     }
   }
 
+  isNearVertex(mouseX, mouseY, piece) {
+    const distance = (time, value) => {
+      const x = this.timeToPixel(time);
+      const y = this.valueToPixel(value);
+      const deltaX = x - mouseX;
+      const deltaY = y - mouseY;
+      return Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+    };
+
+    return distance(piece.start.time, piece.start.value) <= 5 ||
+           (piece.interpolant === Interpolant.Quadratic && distance(piece.control.time, piece.control.value) <= 5);
+  }
+
   onMouseMove(event) {
-    const mouseX = event.clientX;
-    const mouseY = event.clientY;
-
-    const plotX = (mouseX - Plot.gap) / this.width;
-    const plotY = 1.0 - (mouseY - Plot.gap) / this.height;
-
-    const isNear = this.pieces.some(piece => {
-      const deltaX = plotX - piece.start.time;
-      const deltaY = 0;
-      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-      return distance <= 5 / this.canvas.width;
-    });
-
+    const bounds = this.canvas.getBoundingClientRect();
+    const isNear = this.pieces.some(piece => this.isNearVertex(event.clientX - bounds.x, event.clientY - bounds.y, piece));
     document.documentElement.classList.toggle('cursor-grab', isNear);
   }
 
@@ -421,6 +423,12 @@ class Plot {
       this.context.beginPath();
       this.context.arc(this.timeToPixel(piece.start.time), this.valueToPixel(piece.start.value), 5, 0, 2 * Math.PI);
       this.context.fill();
+
+      if (piece.interpolant === Interpolant.Quadratic) {
+        this.context.beginPath();
+        this.context.arc(this.timeToPixel(piece.control.time), this.valueToPixel(piece.control.value), 5, 0, 2 * Math.PI);
+        this.context.fill();
+      }
     }
   }
 }
