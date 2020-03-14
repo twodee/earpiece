@@ -309,6 +309,7 @@ class Plot {
     this.context = this.canvas.getContext('2d');
     this.piecePrefix = piecePrefix;
 
+    this.canvas.addEventListener('mousedown', this.onMouseDown.bind(this));
     this.canvas.addEventListener('mousemove', this.onMouseMove.bind(this));
     this.canvas.addEventListener('click', this.onMouseClick.bind(this));
 
@@ -350,22 +351,36 @@ class Plot {
     }
   }
 
-  isNearVertex(mouseX, mouseY, piece) {
-    const distance = (time, value) => {
-      const x = this.timeToPixel(time);
-      const y = this.valueToPixel(value);
-      const deltaX = x - mouseX;
-      const deltaY = y - mouseY;
-      return Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-    };
+  onMouseDown(event) {
+    const bounds = this.canvas.getBoundingClientRect();
+    const mouseX = event.clientX - bounds.x;
+    const mouseY = event.clientY - bounds.y;
+    for (let piece of this.pieces) {
+      if (this.isNearVertex(mouseX, mouseY, piece.start.time, piece.start.value)) {
+        console.log("start");
+      } else if (piece.interpolant === Interpolant.Quadratic && this.isNearVertex(mouseX, mouseY, piece.control.time, piece.control.value)) {
+        console.log("control");
+      }
+    }
+  }
 
-    return distance(piece.start.time, piece.start.value) <= 5 ||
-           (piece.interpolant === Interpolant.Quadratic && distance(piece.control.time, piece.control.value) <= 5);
+  isNearVertex(mouseX, mouseY, time, value) {
+    const x = this.timeToPixel(time);
+    const y = this.valueToPixel(value);
+    const deltaX = x - mouseX;
+    const deltaY = y - mouseY;
+    const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+    return distance <= 5;
   }
 
   onMouseMove(event) {
     const bounds = this.canvas.getBoundingClientRect();
-    const isNear = this.pieces.some(piece => this.isNearVertex(event.clientX - bounds.x, event.clientY - bounds.y, piece));
+    const mouseX = event.clientX - bounds.x;
+    const mouseY = event.clientY - bounds.y;
+    const isNear = this.pieces.some(piece => (
+      this.isNearVertex(mouseX, mouseY, piece.start.time, piece.start.value) ||
+      (piece.interpolant === Interpolant.Quadratic && this.isNearVertex(mouseX, mouseY, piece.control.time, piece.control.value))
+    ));
     document.documentElement.classList.toggle('cursor-grab', isNear);
   }
 
