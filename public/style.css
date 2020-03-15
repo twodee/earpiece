@@ -105,7 +105,7 @@ body {
   flex-direction: column;
 }
 
-#right audio, #right button {
+#right audio, #right button, #open-picker {
   grid-column: 1 / span 2;
 }
 

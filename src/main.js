@@ -38,12 +38,16 @@ let controlValueInput;
 
 let deleteButton;
 let splitButton;
+let openPicker;
 
 let canvases = [];
 
 let selectedPieces;
 let selectedPiece;
 let selectedPieceIndex;
+
+let currentEffect;
+let currentName = null;
 
 // --------------------------------------------------------------------------- 
 
@@ -227,50 +231,101 @@ function effectToSamples(effect) {
   return samples;
 }
 
-const effect = {
+const defaultEffect = {
   rate: 22050,
-  waveType: Wave.Sawtooth,
-  dutyCycle: 0.2,
-  duration: 1,
+  duration: 3,
+  waveType: Wave.Sine,
   frequencies: [
-    // {time: 0, value: 440, interpolant: 'constant'},
-    // {time: 0.2, value: 880, interpolant: 'constant'},
-    // {time: 0.5, value: 1320, interpolant: 'constant'},
-    // {time: 1, value: 1760},
-
-    // {time: 0, value: 880, interpolant: 'constant'},
-    // {time: 0.5, value: 880, interpolant: 'linear'},
-    // {time: 0.75, value: 3000, interpolant: 'linear'},
-    // {time: 1, value: 0 },
-
-    {name: 'whoop', start: {time: 0, value: 880}, interpolant: Interpolant.Quadratic, control: {time: 0.25, value: 3000}},
-    {name: 'whoop2', start: {time: 0.5, value: 1000}, interpolant: Interpolant.Quadratic, control: {time: 0.75, value: 4000}},
-    {name: 'end', start: {time: 1, value: 200}, interpolant: Interpolant.Constant},
-
-    // [0, 880],
-    // [0.5, 880],
-    // [0.75, 3000],
-    // [1, 0],
+    {name: 'start', start: {time: 0, value: 880}, interpolant: Interpolant.Linear},
+    {name: 'end', start: {time: 1, value: 1760}, interpolant: Interpolant.Constant},
   ],
   amplitudes: [
-    // {time: 0, value: 0, interpolant: 'linear'},
-    // {time: 0.1, value: 1, interpolant: 'constant'},
-    // {time: 0.5, value: 1, interpolant: 'linear'},
-    // {time: 1, value: 0 },
-
-    {name: 'start', start: {time: 0, value: 0.1}, interpolant: Interpolant.Constant},
-    {name: 'mid', start: {time: 0.5, value: 0.5}, interpolant: Interpolant.Linear},
-    {name: 'end', start: {time: 1, value: 1}, interpolant: Interpolant.Constant},
-
-    // [0, 0],
-    // [0.1, 1],
-    // [0.5, 1],
-    // [1, 0],
+    {name: 'start', start: {time: 0, value: 0}, interpolant: Interpolant.Linear},
+    {name: 'middle', start: {time: 0.5, value: 1}, interpolant: Interpolant.Linear},
+    {name: 'end', start: {time: 1, value: 0}, interpolant: Interpolant.Constant},
   ],
 };
 
+let effects = {};
+/*
+const effects = {
+  tester: {
+    rate: 22050,
+    waveType: Wave.Sawtooth,
+    dutyCycle: 0.2,
+    duration: 1,
+    frequencies: [
+      // {time: 0, value: 440, interpolant: 'constant'},
+      // {time: 0.2, value: 880, interpolant: 'constant'},
+      // {time: 0.5, value: 1320, interpolant: 'constant'},
+      // {time: 1, value: 1760},
+
+      // {time: 0, value: 880, interpolant: 'constant'},
+      // {time: 0.5, value: 880, interpolant: 'linear'},
+      // {time: 0.75, value: 3000, interpolant: 'linear'},
+      // {time: 1, value: 0 },
+
+      {name: 'whoop', start: {time: 0, value: 880}, interpolant: Interpolant.Quadratic, control: {time: 0.25, value: 3000}},
+      {name: 'whoop2', start: {time: 0.5, value: 1000}, interpolant: Interpolant.Quadratic, control: {time: 0.75, value: 4000}},
+      {name: 'end', start: {time: 1, value: 200}, interpolant: Interpolant.Constant},
+
+      // [0, 880],
+      // [0.5, 880],
+      // [0.75, 3000],
+      // [1, 0],
+    ],
+    amplitudes: [
+      // {time: 0, value: 0, interpolant: 'linear'},
+      // {time: 0.1, value: 1, interpolant: 'constant'},
+      // {time: 0.5, value: 1, interpolant: 'linear'},
+      // {time: 1, value: 0 },
+
+      {name: 'start', start: {time: 0, value: 0.1}, interpolant: Interpolant.Constant},
+      {name: 'mid', start: {time: 0.5, value: 0.5}, interpolant: Interpolant.Linear},
+      {name: 'end', start: {time: 1, value: 1}, interpolant: Interpolant.Constant},
+
+      // [0, 0],
+      // [0.1, 1],
+      // [0.5, 1],
+      // [1, 0],
+    ],
+  }
+};
+*/
+
+function clonePiece(piece) {
+  const clone = {
+    name: piece.name,
+    start: {time: piece.start.time, value: piece.start.value},
+    interpolant: piece.interpolant,
+  };
+  if (piece.interpolant === Interpolant.Quadratic) {
+    clone.control = {time: piece.control.time, value: piece.control.value};
+  }
+  return clone;
+}
+
+function cloneEffect(effect) {
+  return {
+    rate: effect.rate,
+    waveType: effect.waveType,
+    dutyCycle: effect.dutyCycle,
+    duration: effect.duration,
+    frequencies: effect.frequencies.map(piece => clonePiece(piece)),
+    amplitudes: effect.amplitudes.map(piece => clonePiece(piece)),
+  };
+}
+
+function serializeEffects() {
+  const cleanedEffects = {};
+  for (let [key, value] of Object.entries(effects)) {
+    cleanedEffects[key] = cloneEffect(value);
+  }
+  return JSON.stringify(cleanedEffects);
+}
+
 function generateWav() {
-  const samples = effectToSamples(effect);
+  const samples = effectToSamples(currentEffect);
   const wav = samplesToWav(samples);
   player.src = wav;
 }
@@ -293,6 +348,7 @@ function hookElements() {
   player = document.getElementById('player');
   deleteButton = document.getElementById('delete-button');
   splitButton = document.getElementById('split-button');
+  openPicker = document.getElementById('open-picker');
 
   canvases.push(document.getElementById('frequency-canvas'));
   canvases.push(document.getElementById('amplitude-canvas'));
@@ -378,23 +434,27 @@ class Plot {
       contextMenu.style.display = 'none';
     });
 
-    splitButton.addEventListener('click', () => {
+    splitButton.addEventListener('click', mouseAt => {
       contextMenu.style.display = 'none';
       if (selectedPieces === this.pieces && selectedPieceIndex < selectedPieces.length - 1) {
-        const bounds = this.canvas.getBoundingClientRect();
-        const mouseAt = [
-          event.clientX - bounds.x,
-          event.clientY - bounds.y
-        ];
+        const mouseAt = this.getMouseAt(event);
         let time = this.pixelToTime(mouseAt[0]).toShortFloat();
         let value = this.pixelToValue(mouseAt[1]).toShortFloat();
+
+        if (selectedPiece.interpolant === Interpolant.Quadratic) {
+          if (time < selectedPiece.control.time) {
+            const successor = getSuccessorHandle(this.pieces, selectedPieceIndex, selectedPiece.control);
+            time = (selectedPiece.control.time + successor.time) * 0.5;
+          }
+        }
+
         selectedPieces.splice(selectedPieceIndex + 1, 0, {
           name: '?',
           start: {time, value},
           interpolant: Interpolant.Linear,
         });
         synchronizePieceOptions();
-        const piecePrefix = selectedPieces === effect.frequencies ? 'f' : 'a';
+        const piecePrefix = selectedPieces === currentEffect.frequencies ? 'f' : 'a';
         piecePicker.value = `${piecePrefix}:${selectedPieceIndex + 1}`;
         loadPiece(selectedPieces, selectedPieceIndex + 1);
         renderPlots();
@@ -407,6 +467,19 @@ class Plot {
     this.mouseDown0 = null;
 
     this.updateBounds();
+  }
+
+  loadPieces(pieces) {
+    this.pieces = pieces;
+    this.updateBounds();
+  }
+
+  getMouseAt(event) {
+    const bounds = this.canvas.getBoundingClientRect();
+    return [
+      event.clientX - bounds.x,
+      event.clientY - bounds.y
+    ];
   }
 
   timeToPixel(t) {
@@ -453,11 +526,7 @@ class Plot {
   }
 
   handleSelect(event) {
-    const bounds = this.canvas.getBoundingClientRect();
-    const mouseAt = [
-      event.clientX - bounds.x,
-      event.clientY - bounds.y
-    ];
+    const mouseAt = this.getMouseAt(event);
     const delta = Math.abs(mouseAt[0] - this.mouseDownAt[0]) + Math.abs(mouseAt[1] - this.mouseDownAt[1]);
 
     if (delta < 4) {
@@ -516,12 +585,7 @@ class Plot {
   };
 
   onMouseDrag = event => {
-    const bounds = this.canvas.getBoundingClientRect();
-    const mouseAt = [
-      event.clientX - bounds.x,
-      event.clientY - bounds.y
-    ];
-
+    const mouseAt = this.getMouseAt(event);
     const time = this.pixelToTime(mouseAt[0]).toShortFloat();
     const value = this.pixelToValue(mouseAt[1]).toShortFloat();
 
@@ -546,13 +610,8 @@ class Plot {
   };
 
   onMouseMove = event => {
-    const bounds = this.canvas.getBoundingClientRect();
-    const mouseAt = [
-      event.clientX - bounds.x,
-      event.clientY - bounds.y
-    ];
-
     if (!this.dragPiece) {
+      const mouseAt = this.getMouseAt(event);
       const isNear = this.pieces.some(piece => {
         return (
           this.isNearHandle(mouseAt, piece.start.time, piece.start.value) ||
@@ -655,8 +714,8 @@ function initialize() {
   hookElements();
 
   plots = [
-    new Plot('frequency', canvases[0], effect.frequencies, 1000, true, 'f'),
-    new Plot('amplitude', canvases[1], effect.amplitudes, 1, false, 'a'),
+    new Plot('frequency', canvases[0], [], 1000, true, 'f'),
+    new Plot('amplitude', canvases[1], [], 1, false, 'a'),
   ];
 
   for (let type of Object.keys(Wave)) {
@@ -676,7 +735,7 @@ function initialize() {
   const registerEffectFloatListener = (input, key) => {
     input.addEventListener('input', () => {
       if (input.value.match(/^\d+(\.\d+)?$/)) {
-        effect[key] = parseFloat(input.value);
+        currentEffect[key] = parseFloat(input.value);
         synchronizePieceInputs(selectedPiece);
         renderPlots();
         input.classList.remove('error');
@@ -705,7 +764,7 @@ function initialize() {
     input.addEventListener('input', () => {
       if (input.value.match(/^\d+(\.\d+)?$/)) {
         let time = parseFloat(input.value);
-        time /= effect.duration;
+        time /= currentEffect.duration;
 
         const predecessor = getPredecessorHandle(selectedPieces, selectedPieceIndex, selectedPiece[host]);
         const successor = getSuccessorHandle(selectedPieces, selectedPieceIndex, selectedPiece[host]);
@@ -724,7 +783,7 @@ function initialize() {
     });
 
     input.addEventListener('blur', () => {
-      input.value = selectedPiece[host].time * effect.duration;
+      input.value = selectedPiece[host].time * currentEffect.duration;
       input.classList.remove('error');
     });
   };
@@ -733,7 +792,7 @@ function initialize() {
   registerEffectFloatListener(dutyCycleInput, 'dutyCycle');
 
   waveTypePicker.addEventListener('change', () => {
-    effect.waveType = waveTypePicker.value;
+    currentEffect.waveType = waveTypePicker.value;
     synchronizeWaveOptions();
     renderPlots();
   });
@@ -741,9 +800,9 @@ function initialize() {
   piecePicker.addEventListener('change', () => {
     const index = parseInt(piecePicker.value.substring(2));
     if (piecePicker.value.charAt(0) === 'f') {
-      loadPiece(effect.frequencies, index);
+      loadPiece(currentEffect.frequencies, index);
     } else {
-      loadPiece(effect.amplitudes, index);
+      loadPiece(currentEffect.amplitudes, index);
     }
   });
 
@@ -771,15 +830,61 @@ function initialize() {
     contextMenu.style.display = 'none';
   });
 
-  loadEffect(effect);
+  const saveAsButton = document.getElementById('save-as-button');
+  saveAsButton.addEventListener('click', saveAs);
+
+  const saveButton = document.getElementById('save-button');
+  saveButton.addEventListener('click', save);
+
+  const newButton = document.getElementById('new-button');
+  newButton.addEventListener('click', () => {
+    loadEffect(cloneEffect(defaultEffect));
+  });
+
+  openPicker.addEventListener('change', () => {
+    const name = openPicker.value; 
+    if (name) {
+      currentName = name;
+      loadEffect(effects[name]);
+    }
+  });
+
+  const json = localStorage.getItem('effects');
+  effects = JSON.parse(json);
+
+  synchronizeOpenOptions();
+  loadEffect(cloneEffect(defaultEffect));
 
   window.addEventListener('resize', resize);
   resize();
 }
 
+function save() {
+  if (currentName) {
+    effects[currentName] = currentEffect;
+    updateStorage();
+  } else {
+    saveAs();
+  }
+}
+
+function saveAs() {
+  const name = prompt('Name of effect:');
+  if (name && name.length > 0) {
+    effects[name] = currentEffect;
+    updateStorage();
+  }
+}
+
+function updateStorage() {
+  const json = serializeEffects();
+  localStorage.setItem('effects', json);
+  synchronizeOpenOptions();
+}
+
 function synchronizeWaveOptions() {
-  dutyCycleInput.value = effect.dutyCycle;
-  if (effect.waveType === Wave.Square) {
+  dutyCycleInput.value = currentEffect.dutyCycle;
+  if (currentEffect.waveType === Wave.Square) {
     dutyCycleLabel.style.display = 'inline';
     dutyCycleInput.style.display = 'inline';
   } else {
@@ -793,14 +898,14 @@ function synchronizePieceOptions() {
     piecePicker.removeChild(piecePicker.lastChild);
   }
 
-  for (let [i, frequencyPiece] of effect.frequencies.entries()) {
+  for (let [i, frequencyPiece] of currentEffect.frequencies.entries()) {
     let option = document.createElement('option');
     option.value = `f:${i}`;
     option.textContent = `frequency ${i}: ${frequencyPiece.name}`;
     piecePicker.appendChild(option);
   }
 
-  for (let [i, amplitudePiece] of effect.amplitudes.entries()) {
+  for (let [i, amplitudePiece] of currentEffect.amplitudes.entries()) {
     let option = document.createElement('option');
     option.value = `a:${i}`;
     option.textContent = `amplitude ${i}: ${amplitudePiece.name}`;
@@ -808,19 +913,40 @@ function synchronizePieceOptions() {
   }
 }
 
+function synchronizeOpenOptions() {
+  while (openPicker.firstChild) {
+    openPicker.removeChild(openPicker.lastChild);
+  }
+
+  let option = document.createElement('option');
+  option.value = '';
+  option.textContent = 'open...';
+  openPicker.appendChild(option);
+
+  for (let key of Object.keys(effects)) {
+    let option = document.createElement('option');
+    option.value = key;
+    option.textContent = key;
+    openPicker.appendChild(option);
+  }
+}
+
 function loadEffect(effect) {
+  currentEffect = effect;
   durationInput.value = effect.duration;
   waveTypePicker.value = effect.waveType;
   synchronizeWaveOptions();
   synchronizePieceOptions();
+  plots[0].loadPieces(effect.frequencies);
+  plots[1].loadPieces(effect.amplitudes);
   loadPiece(effect.frequencies, 0);
 }
 
 function synchronizePieceInputs(piece) {
-  startTimeInput.value = (piece.start.time * effect.duration).toShortFloat();
+  startTimeInput.value = (piece.start.time * currentEffect.duration).toShortFloat();
   startValueInput.value = piece.start.value;
   if (piece.interpolant === Interpolant.Quadratic) {
-    controlTimeInput.value = (piece.control.time * effect.duration).toShortFloat();
+    controlTimeInput.value = (piece.control.time * currentEffect.duration).toShortFloat();
     controlValueInput.value = piece.control.value;
   }
 }
