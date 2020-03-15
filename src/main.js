@@ -19,6 +19,8 @@ const Interpolant = Object.freeze({
 
 // --------------------------------------------------------------------------- 
 
+let contextMenu;
+
 let durationInput;
 let waveTypePicker;
 let dutyCycleLabel;
@@ -33,6 +35,9 @@ let controlTimeLabel;
 let controlTimeInput;
 let controlValueLabel;
 let controlValueInput;
+
+let deleteButton;
+let splitButton;
 
 let canvases = [];
 
@@ -271,6 +276,7 @@ function generateWav() {
 }
 
 function hookElements() {
+  contextMenu = document.getElementById('context-menu');
   durationInput = document.getElementById('duration-input');
   waveTypePicker = document.getElementById('wave-type-picker');
   dutyCycleLabel = document.getElementById('duty-cycle-label');
@@ -285,6 +291,8 @@ function hookElements() {
   controlValueLabel = document.getElementById('control-value-label');
   controlValueInput = document.getElementById('control-value-input');
   player = document.getElementById('player');
+  deleteButton = document.getElementById('delete-button');
+  splitButton = document.getElementById('split-button');
 
   canvases.push(document.getElementById('frequency-canvas'));
   canvases.push(document.getElementById('amplitude-canvas'));
@@ -357,6 +365,41 @@ class Plot {
     this.canvas.addEventListener('mousemove', this.onMouseMove);
     this.canvas.addEventListener('mousedown', this.onMouseDown);
     this.canvas.addEventListener('click', this.onMouseClick);
+    this.canvas.addEventListener('contextmenu', this.onContextMenu);
+
+    deleteButton.addEventListener('click', () => {
+      if (selectedPieces === this.pieces && selectedPieceIndex > 0 && selectedPieceIndex < selectedPieces.length - 1) {
+        selectedPieces.splice(selectedPieceIndex, 1);
+        synchronizePieceOptions();
+        piecePicker.value = `${this.piecePrefix}:${selectedPieceIndex - 1}`;
+        loadPiece(selectedPieces, selectedPieceIndex - 1);
+        renderPlots();
+      }
+      contextMenu.style.display = 'none';
+    });
+
+    splitButton.addEventListener('click', () => {
+      contextMenu.style.display = 'none';
+      if (selectedPieces === this.pieces && selectedPieceIndex < selectedPieces.length - 1) {
+        const bounds = this.canvas.getBoundingClientRect();
+        const mouseAt = [
+          event.clientX - bounds.x,
+          event.clientY - bounds.y
+        ];
+        let time = this.pixelToTime(mouseAt[0]).toShortFloat();
+        let value = this.pixelToValue(mouseAt[1]).toShortFloat();
+        selectedPieces.splice(selectedPieceIndex + 1, 0, {
+          name: '?',
+          start: {time, value},
+          interpolant: Interpolant.Linear,
+        });
+        synchronizePieceOptions();
+        const piecePrefix = selectedPieces === effect.frequencies ? 'f' : 'a';
+        piecePicker.value = `${piecePrefix}:${selectedPieceIndex + 1}`;
+        loadPiece(selectedPieces, selectedPieceIndex + 1);
+        renderPlots();
+      }
+    });
 
     this.dragIndex = null;
     this.dragPiece = null;
@@ -392,7 +435,24 @@ class Plot {
     }, this.minimumMaximumValue);
   }
 
+  onContextMenu = event => {
+    this.handleSelect(event);
+    contextMenu.style.display = 'flex';
+    contextMenu.style.top = event.pageY + 'px';
+    contextMenu.style.left = event.pageX + 'px';
+    event.preventDefault();
+    return false;
+  };
+
   onMouseClick = event => {
+    if (contextMenu.style.display !== 'none') {
+      contextMenu.style.display = 'none';
+    } else {
+      this.handleSelect(event);
+    }
+  }
+
+  handleSelect(event) {
     const bounds = this.canvas.getBoundingClientRect();
     const mouseAt = [
       event.clientX - bounds.x,
@@ -674,7 +734,7 @@ function initialize() {
 
   waveTypePicker.addEventListener('change', () => {
     effect.waveType = waveTypePicker.value;
-    syncWaveOptions();
+    synchronizeWaveOptions();
     renderPlots();
   });
 
@@ -704,10 +764,11 @@ function initialize() {
   const generateWavButton = document.getElementById('generate-wav-button');
   generateWavButton.addEventListener('click', generateWav);
 
-  const fitPlotsButton = document.getElementById('fit-plots-button');
-  fitPlotsButton.addEventListener('click', () => {
+  const fitButton = document.getElementById('fit-button');
+  fitButton.addEventListener('click', () => {
     plots[0].updateBounds();
     plots[0].render();
+    contextMenu.style.display = 'none';
   });
 
   loadEffect(effect);
@@ -716,7 +777,7 @@ function initialize() {
   resize();
 }
 
-function syncWaveOptions() {
+function synchronizeWaveOptions() {
   dutyCycleInput.value = effect.dutyCycle;
   if (effect.waveType === Wave.Square) {
     dutyCycleLabel.style.display = 'inline';
@@ -727,11 +788,7 @@ function syncWaveOptions() {
   }
 }
 
-function loadEffect(effect) {
-  durationInput.value = effect.duration;
-  waveTypePicker.value = effect.waveType;
-  syncWaveOptions();
-
+function synchronizePieceOptions() {
   while (piecePicker.firstChild) {
     piecePicker.removeChild(piecePicker.lastChild);
   }
@@ -749,15 +806,21 @@ function loadEffect(effect) {
     option.textContent = `amplitude ${i}: ${amplitudePiece.name}`;
     piecePicker.appendChild(option);
   }
+}
 
+function loadEffect(effect) {
+  durationInput.value = effect.duration;
+  waveTypePicker.value = effect.waveType;
+  synchronizeWaveOptions();
+  synchronizePieceOptions();
   loadPiece(effect.frequencies, 0);
 }
 
 function synchronizePieceInputs(piece) {
-  startTimeInput.value = piece.start.time * effect.duration;
+  startTimeInput.value = (piece.start.time * effect.duration).toShortFloat();
   startValueInput.value = piece.start.value;
   if (piece.interpolant === Interpolant.Quadratic) {
-    controlTimeInput.value = piece.control.time * effect.duration;
+    controlTimeInput.value = (piece.control.time * effect.duration).toShortFloat();
     controlValueInput.value = piece.control.value;
   }
 }

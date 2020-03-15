@@ -7,6 +7,12 @@
   <script defer src="dist/bundle.js"></script>
 </head>
 <body>
+  <ul id="context-menu">
+    <li id="fit-button">fit</li>
+    <li id="split-button">split</li>
+    <li id="delete-button">delete</li>
+  </ul>
+
   <div id="root">
     <div id="left">
       <div class="canvas-wrapper shadowed"><canvas id="frequency-canvas" class="function-canvas"></canvas></div>
@@ -25,8 +31,6 @@
 
         <label id="duty-cycle-label" for="duty-cycle-input">duty cycle</label>
         <input id="duty-cycle-input" type="text">
-
-        <button id="fit-plots-button">fit plots</button>
 
         <!-- --------------------------------------------------------------------- -->
         <h1>Piece</h1>
