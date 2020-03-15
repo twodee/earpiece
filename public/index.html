@@ -9,61 +9,65 @@
 <body>
   <div id="root">
     <div id="left">
-      <div class="canvas-wrapper"><canvas id="frequency-canvas" class="function-canvas"></canvas></div>
-      <div class="canvas-wrapper"><canvas id="amplitude-canvas" class="function-canvas"></canvas></div>
+      <div class="canvas-wrapper shadowed"><canvas id="frequency-canvas" class="function-canvas"></canvas></div>
+      <div class="canvas-wrapper shadowed"><canvas id="amplitude-canvas" class="function-canvas"></canvas></div>
     </div>
-    <div id="right">
-      <!-- --------------------------------------------------------------------- -->
-      <h1>Effect</h1>
+    <div id="right-wrapper" class="wrapper">
+      <div id="right" class="shadowed">
+        <!-- --------------------------------------------------------------------- -->
+        <h1>Effect</h1>
 
-      <label for="duration-input">duration</label>
-      <input id="duration-input" type="text">
+        <label for="duration-input">duration</label>
+        <input id="duration-input" type="text">
 
-      <label for="wave-type-picker">wave type</label>
-      <select id="wave-type-picker"></select>
+        <label for="wave-type-picker">wave type</label>
+        <select id="wave-type-picker"></select>
 
-      <label id="duty-cycle-label" for="duty-cycle-input">duty cycle</label>
-      <input id="duty-cycle-input" type="text">
+        <label id="duty-cycle-label" for="duty-cycle-input">duty cycle</label>
+        <input id="duty-cycle-input" type="text">
 
-      <!-- --------------------------------------------------------------------- -->
-      <h1>Piece</h1>
+        <button id="fit-plots-button">fit plots</button>
 
-      <label for="piece-picker">piece</label>
-      <select id="piece-picker">
-      </select>
+        <!-- --------------------------------------------------------------------- -->
+        <h1>Piece</h1>
 
-      <label for="piece-name-input">name</label>
-      <input id="piece-name-input" type="text">
+        <label for="piece-picker">piece</label>
+        <select id="piece-picker">
+        </select>
 
-      <label for="start-time-input">start time</label>
-      <input id="start-time-input" type="text">
+        <label for="piece-name-input">name</label>
+        <input id="piece-name-input" type="text">
 
-      <label for="start-value-input">start value</label>
-      <input id="start-value-input" type="text">
+        <label for="start-time-input">start time</label>
+        <input id="start-time-input" type="text">
 
-      <label for="interpolant-picker">interpolant</label>
-      <select id="interpolant-picker"></select>
+        <label for="start-value-input">start value</label>
+        <input id="start-value-input" type="text">
 
-      <label id="control-time-label" for="control-time-input">control time</label>
-      <input id="control-time-input" type="text">
+        <label for="interpolant-picker">interpolant</label>
+        <select id="interpolant-picker"></select>
 
-      <label id="control-value-label" for="control-value-input">control value</label>
-      <input id="control-value-input" type="text">
+        <label id="control-time-label" for="control-time-input">control time</label>
+        <input id="control-time-input" type="text">
 
-      <button id="split-piece-button">split</button>
-      <button id="remove-piece-button">remove</button>
+        <label id="control-value-label" for="control-value-input">control value</label>
+        <input id="control-value-input" type="text">
 
-      <!-- --------------------------------------------------------------------- -->
-      <h1>I/O</h1>
+        <button id="split-piece-button">split</button>
+        <button id="remove-piece-button">remove</button>
 
-      <button id="generate-wav-button">generate wav</button>
+        <!-- --------------------------------------------------------------------- -->
+        <h1>I/O</h1>
 
-      <audio id="player" controls></audio>
+        <button id="generate-wav-button">generate wav</button>
 
-      <button id="save-as-button">save as...</button>
-      <button id="save-button">save</button>
-      <button id="export-wav-button">export wav</button>
-      <button id="export-archive-button">export archive</button>
+        <audio id="player" controls></audio>
+
+        <button id="save-as-button">save as...</button>
+        <button id="save-button">save</button>
+        <button id="export-wav-button">export wav</button>
+        <button id="export-archive-button">export archive</button>
+      </div>
     </div>
   </div>
 </body>

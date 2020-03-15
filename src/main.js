@@ -36,7 +36,9 @@ let controlValueInput;
 
 let canvases = [];
 
+let selectedPieces;
 let selectedPiece;
+let selectedPieceIndex;
 
 // --------------------------------------------------------------------------- 
 
@@ -158,7 +160,7 @@ function quadraticInterpolant(fromTime, fromValue, throughTime, throughValue, to
   const denominator = (fromTime - throughTime) * (fromTime - toTime) * (throughTime - toTime);
   const a = (toTime * (throughValue - fromValue) + throughTime * (fromValue - toValue) + fromTime * (toValue - throughValue)) / denominator;
   const b = (toTime * toTime * (fromValue - throughValue) + throughTime * throughTime * (toValue - fromValue) + fromTime * fromTime * (throughValue - toValue)) / denominator;
-  const c = (throughTime * toTime * (throughTime - toTime) * fromValue + toTime * fromTime * (toTime - fromTime) * throughValue + fromTime * throughTime * (fromTime - fromTime) * toValue) / denominator;
+  const c = (throughTime * toTime * (throughTime - toTime) * fromValue + toTime * fromTime * (toTime - fromTime) * throughValue + fromTime * throughTime * (fromTime - throughTime) * toValue) / denominator;
   return t => {
     return a * t * t + b * t + c;
   };
@@ -236,7 +238,8 @@ const effect = {
     // {time: 0.75, value: 3000, interpolant: 'linear'},
     // {time: 1, value: 0 },
 
-    {name: 'whoop', start: {time: 0, value: 880}, interpolant: Interpolant.Quadratic, control: {time: 0.5, value: 3000}},
+    {name: 'whoop', start: {time: 0, value: 880}, interpolant: Interpolant.Quadratic, control: {time: 0.25, value: 3000}},
+    {name: 'whoop2', start: {time: 0.5, value: 1000}, interpolant: Interpolant.Quadratic, control: {time: 0.75, value: 4000}},
     {name: 'end', start: {time: 1, value: 200}, interpolant: Interpolant.Constant},
 
     // [0, 880],
@@ -303,12 +306,15 @@ function renderPlots() {
 // --------------------------------------------------------------------------- 
 
 class Plot {
-  static gap = 10;
+  static GAP = 10;
+  static LABEL_GAP = 30;
 
-  constructor(canvas, pieces, minimumMaximumValue, piecePrefix) {
+  constructor(title, canvas, pieces, minimumMaximumValue, isValueExpandable, piecePrefix) {
+    this.title = title;
     this.canvas = canvas;
     this.pieces = pieces;
     this.minimumMaximumValue = minimumMaximumValue;
+    this.isValueExpandable = isValueExpandable;
     this.maximumValue = null;
     this.width = null;
     this.height = null;
@@ -329,19 +335,19 @@ class Plot {
   }
 
   timeToPixel(t) {
-    return Plot.gap + this.width * t;
+    return Plot.LABEL_GAP + this.width * t;
   }
 
   pixelToTime(x) {
-    return (x - Plot.gap) / this.width;
+    return (x - Plot.LABEL_GAP) / this.width;
   }
 
   valueToPixel(value) {
-    return this.canvas.height - (Plot.gap + this.height * (value / this.maximumValue));
+    return this.canvas.height - (Plot.LABEL_GAP + this.height * (value / this.maximumValue));
   }
 
   pixelToValue(y) {
-    return (this.canvas.height - y - Plot.gap) / this.height * this.maximumValue;
+    return (this.canvas.height - y - Plot.LABEL_GAP) / this.height * this.maximumValue;
   }
 
   updateBounds() {
@@ -374,9 +380,8 @@ class Plot {
   }
 
   selectPiece(i) {
-    selectedPiece = this.pieces[i];
     piecePicker.value = `${this.piecePrefix}:${i}`;
-    loadPiece(selectedPiece);
+    loadPiece(this.pieces, i);
     renderPlots();
   }
 
@@ -468,6 +473,10 @@ class Plot {
         }
       }
 
+      if (this.isValueExpandable && value > this.maximumValue) {
+        this.maximumValue = value;
+      }
+
       this.dragHandle.value = Math.max(0, Math.min(value, this.maximumValue));
 
       synchronizePieceInputs(this.dragPiece);
@@ -498,26 +507,39 @@ class Plot {
     if (realWidth !== this.canvas.width || realHeight !== this.canvas.height) {
       this.canvas.width = realWidth;
       this.canvas.height = realHeight;
-      this.width = this.canvas.width - 2 * Plot.gap;
-      this.height = this.canvas.height - 2 * Plot.gap;
+      this.width = this.canvas.width - Plot.GAP - Plot.LABEL_GAP;
+      this.height = this.canvas.height - Plot.GAP - Plot.LABEL_GAP;
     }
   }
 
   render() {
     this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
-    this.context.lineWidth = 0.4;
-    this.context.strokeStyle = 'black';
-    this.context.strokeRect(Plot.gap, Plot.gap, this.width, this.height);
+    this.context.fillStyle = 'rgb(0, 0, 0)';
+
+    this.context.font = '20px sans-serif';
+    this.context.textAlign = 'center';
+    this.context.textBaseline = 'top';
+
+    this.context.save();
+    this.context.rotate(-90 * Math.PI / 180);
+    this.context.fillText(this.title, -this.canvas.height * 0.5, 5);
+    this.context.restore();
+
+    this.context.textBaseline = 'bottom';
+    this.context.fillText('time', this.canvas.width * 0.5, this.canvas.height - 5);
 
     this.context.lineWidth = 1;
-    this.context.strokeStyle = 'red';
+    this.context.strokeStyle = 'rgb(150, 150, 150)';
+    this.context.strokeRect(Plot.LABEL_GAP, Plot.GAP, this.width, this.height);
+
+    this.context.strokeStyle = 'rgb(255, 180, 0)';
 
     for (let i = 0; i < this.pieces.length - 1; ++i) {
       const curr = this.pieces[i];
       const next = this.pieces[i + 1];
 
-      this.context.lineWidth = curr === selectedPiece ? 2 : 0.4;
+      this.context.lineWidth = curr === selectedPiece ? 5 : 1.5;
 
       if (curr.interpolant === Interpolant.Linear) {
         this.context.beginPath();
@@ -537,11 +559,11 @@ class Plot {
         for (let t = curr.start.time; t < next.start.time; t += deltaT) {
           this.context.lineTo(this.timeToPixel(t), this.valueToPixel(interpolator(t)));
         }
+        this.context.lineTo(this.timeToPixel(next.start.time), this.valueToPixel(next.start.value));
         this.context.stroke();
       }
     }
 
-    this.context.fillStyle = 'rgb(0, 0, 0)';
     for (let piece of this.pieces) {
       this.context.beginPath();
       this.context.arc(this.timeToPixel(piece.start.time), this.valueToPixel(piece.start.value), 5, 0, 2 * Math.PI);
@@ -562,8 +584,8 @@ function initialize() {
   hookElements();
 
   plots = [
-    new Plot(canvases[0], effect.frequencies, 1000, 'f'),
-    new Plot(canvases[1], effect.amplitudes, 1, 'a'),
+    new Plot('frequency', canvases[0], effect.frequencies, 1000, true, 'f'),
+    new Plot('amplitude', canvases[1], effect.amplitudes, 1, false, 'a'),
   ];
 
   for (let type of Object.keys(Wave)) {
@@ -596,7 +618,11 @@ function initialize() {
   const registerPieceFloatListener = (host, input, key) => {
     input.addEventListener('input', () => {
       if (input.value.match(/^\d+(\.\d+)?$/)) {
-        selectedPiece[host][key] = parseFloat(input.value);
+        let value = parseFloat(input.value);
+        if (key === 'time') {
+          value /= effect.duration;
+        }
+        selectedPiece[host][key] = value;
         plots[0].updateBounds();
         plots[1].updateBounds();
         renderPlots();
@@ -619,15 +645,15 @@ function initialize() {
   piecePicker.addEventListener('change', () => {
     const index = parseInt(piecePicker.value.substring(2));
     if (piecePicker.value.charAt(0) === 'f') {
-      loadPiece(effect.frequencies[index]);
+      loadPiece(effect.frequencies, index);
     } else {
-      loadPiece(effect.amplitudes[index]);
+      loadPiece(effect.amplitudes, index);
     }
   });
 
   interpolantPicker.addEventListener('change', () => {
     selectedPiece.interpolant = interpolantPicker.value;
-    loadPiece(selectedPiece);
+    loadPiece(selectedPieces, selectedPieceIndex);
   });
 
   pieceNameInput.addEventListener('input', () => {
@@ -641,6 +667,12 @@ function initialize() {
 
   const generateWavButton = document.getElementById('generate-wav-button');
   generateWavButton.addEventListener('click', generateWav);
+
+  const fitPlotsButton = document.getElementById('fit-plots-button');
+  fitPlotsButton.addEventListener('click', () => {
+    plots[0].updateBounds();
+    plots[0].render();
+  });
 
   loadEffect(effect);
 
@@ -682,7 +714,7 @@ function loadEffect(effect) {
     piecePicker.appendChild(option);
   }
 
-  loadPiece(effect.frequencies[0]);
+  loadPiece(effect.frequencies, 0);
 }
 
 function synchronizePieceInputs(piece) {
@@ -694,24 +726,22 @@ function synchronizePieceInputs(piece) {
   }
 }
 
-function loadPiece(piece) {
-  selectedPiece = piece;
+function loadPiece(pieces, index) {
+  selectedPieces = pieces;
+  selectedPieceIndex = index;
+  selectedPiece = pieces[index];
 
-  pieceNameInput.value = piece.name;
-  interpolantPicker.value = piece.interpolant;
-  synchronizePieceInputs(piece);
+  pieceNameInput.value = selectedPiece.name;
+  interpolantPicker.value = selectedPiece.interpolant;
+  synchronizePieceInputs(selectedPiece);
 
-  if (piece.interpolant === Interpolant.Quadratic) {
-    controlTimeInput.style.display = 'inline';
-    controlValueInput.style.display = 'inline';
-    controlTimeLabel.style.display = 'inline';
-    controlValueLabel.style.display = 'inline';
-  } else {
-    controlTimeInput.style.display = 'none';
-    controlValueInput.style.display = 'none';
-    controlTimeLabel.style.display = 'none';
-    controlValueLabel.style.display = 'none';
-  }
+  startTimeInput.disabled = index === 0 || index === pieces.length - 1;
+
+  const display = selectedPiece.interpolant === Interpolant.Quadratic ? 'inline' : 'none';
+  controlTimeInput.style.display = display;
+  controlValueInput.style.display = display;
+  controlTimeLabel.style.display = display;
+  controlValueLabel.style.display = display;
 
   renderPlots();
 }
