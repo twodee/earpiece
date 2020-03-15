@@ -303,6 +303,39 @@ function renderPlots() {
   }
 }
 
+function getPredecessorHandle(pieces, pieceIndex, vertex) {
+  const piece = pieces[pieceIndex];
+  if (piece.interpolant === Interpolant.Quadratic && vertex === piece.control) {
+    return piece.start;
+  } else if (pieceIndex > 0) {
+    const predecessor = pieces[pieceIndex - 1];
+    if (predecessor.interpolant === Interpolant.Quadratic) {
+      return predecessor.control;
+    } else {
+      return predecessor.start;
+    }
+  } else {
+    return null;
+  }
+}
+
+function getSuccessorHandle(pieces, pieceIndex, vertex) {
+  const piece = pieces[pieceIndex];
+  if (piece.interpolant === Interpolant.Quadratic) {
+    if (vertex === piece.start) {
+      return piece.control;
+    } else if (pieceIndex < pieces.length - 1) {
+      return pieces[pieceIndex + 1].start;
+    } else {
+      return null;
+    }
+  } else if (pieceIndex < pieces.length - 1) {
+    return pieces[pieceIndex + 1].start;
+  } else {
+    return null;
+  }
+}
+
 // --------------------------------------------------------------------------- 
 
 class Plot {
@@ -321,9 +354,8 @@ class Plot {
     this.context = this.canvas.getContext('2d');
     this.piecePrefix = piecePrefix;
 
-    this.canvas.addEventListener('mouseup', this.onMouseUp);
-    this.canvas.addEventListener('mousedown', this.onMouseDown);
     this.canvas.addEventListener('mousemove', this.onMouseMove);
+    this.canvas.addEventListener('mousedown', this.onMouseDown);
     this.canvas.addEventListener('click', this.onMouseClick);
 
     this.dragIndex = null;
@@ -405,6 +437,8 @@ class Plot {
         document.documentElement.classList.remove('cursor-grab');
         document.documentElement.classList.add('cursor-grabbing');
         this.selectPiece(i);
+        document.addEventListener('mouseup', this.onMouseUp);
+        document.addEventListener('mousemove', this.onMouseDrag);
         break;
       }
     }
@@ -416,41 +450,40 @@ class Plot {
       this.dragIndex = null;
       this.dragPiece = null;
       this.dragHandle = null;
+      document.removeEventListener('mouseup', this.onMouseUp);
+      document.removeEventListener('mousemove', this.onMouseDrag);
     }
   };
 
-  getPredecessorHandle(pieceIndex, handle) {
-    const piece = this.pieces[pieceIndex];
-    if (piece.interpolant === Interpolant.Quadratic && handle === piece.control) {
-      return piece.start;
-    } else if (pieceIndex > 0) {
-      const predecessor = this.pieces[pieceIndex - 1];
-      if (predecessor.interpolant === Interpolant.Quadratic) {
-        return predecessor.control;
-      } else {
-        return predecessor.start;
-      }
-    } else {
-      return null;
-    }
-  }
+  onMouseDrag = event => {
+    const bounds = this.canvas.getBoundingClientRect();
+    const mouseAt = [
+      event.clientX - bounds.x,
+      event.clientY - bounds.y
+    ];
 
-  getSuccessorHandle(pieceIndex, handle) {
-    const piece = this.pieces[pieceIndex];
-    if (piece.interpolant === Interpolant.Quadratic) {
-      if (handle === piece.start) {
-        return piece.control;
-      } else if (pieceIndex < this.pieces.length - 1) {
-        return this.pieces[pieceIndex + 1].start;
-      } else {
-        return null;
+    const time = this.pixelToTime(mouseAt[0]).toShortFloat();
+    const value = this.pixelToValue(mouseAt[1]).toShortFloat();
+
+    // Don't allow first and last pieces to have their start time moved.
+    if ((this.dragIndex > 0 && this.dragIndex < this.pieces.length - 1) || this.dragHandle !== this.dragPiece.start) {
+
+      const predecessor = getPredecessorHandle(this.pieces, this.dragIndex, this.dragHandle);
+      const successor = getSuccessorHandle(this.pieces, this.dragIndex, this.dragHandle);
+      if (predecessor.time < time && time < successor.time) {
+        this.dragHandle.time = time;
       }
-    } else if (pieceIndex < this.pieces.length - 1) {
-      return this.pieces[pieceIndex + 1].start;
-    } else {
-      return null;
     }
-  }
+
+    if (this.isValueExpandable && value > this.maximumValue) {
+      this.maximumValue = value;
+    }
+
+    this.dragHandle.value = Math.max(0, Math.min(value, this.maximumValue));
+
+    synchronizePieceInputs(this.dragPiece);
+    this.render();
+  };
 
   onMouseMove = event => {
     const bounds = this.canvas.getBoundingClientRect();
@@ -459,29 +492,7 @@ class Plot {
       event.clientY - bounds.y
     ];
 
-    if (this.dragPiece) {
-      const time = this.pixelToTime(mouseAt[0]).toShortFloat();
-      const value = this.pixelToValue(mouseAt[1]).toShortFloat();
-
-      // Don't allow first and last pieces to have their start time moved.
-      if ((this.dragIndex > 0 && this.dragIndex < this.pieces.length - 1) || this.dragHandle !== this.dragPiece.start) {
-
-        const predecessor = this.getPredecessorHandle(this.dragIndex, this.dragHandle);
-        const successor = this.getSuccessorHandle(this.dragIndex, this.dragHandle);
-        if (predecessor.time < time && time < successor.time) {
-          this.dragHandle.time = time;
-        }
-      }
-
-      if (this.isValueExpandable && value > this.maximumValue) {
-        this.maximumValue = value;
-      }
-
-      this.dragHandle.value = Math.max(0, Math.min(value, this.maximumValue));
-
-      synchronizePieceInputs(this.dragPiece);
-      this.render();
-    } else {
+    if (!this.dragPiece) {
       const isNear = this.pieces.some(piece => {
         return (
           this.isNearHandle(mouseAt, piece.start.time, piece.start.value) ||
@@ -619,9 +630,6 @@ function initialize() {
     input.addEventListener('input', () => {
       if (input.value.match(/^\d+(\.\d+)?$/)) {
         let value = parseFloat(input.value);
-        if (key === 'time') {
-          value /= effect.duration;
-        }
         selectedPiece[host][key] = value;
         plots[0].updateBounds();
         plots[1].updateBounds();
@@ -630,6 +638,34 @@ function initialize() {
       } else {
         input.classList.add('error');
       }
+    });
+  };
+
+  const registerPieceTimeListener = (host, input) => {
+    input.addEventListener('input', () => {
+      if (input.value.match(/^\d+(\.\d+)?$/)) {
+        let time = parseFloat(input.value);
+        time /= effect.duration;
+
+        const predecessor = getPredecessorHandle(selectedPieces, selectedPieceIndex, selectedPiece[host]);
+        const successor = getSuccessorHandle(selectedPieces, selectedPieceIndex, selectedPiece[host]);
+        if (predecessor.time < time && time < successor.time) {
+          selectedPiece[host].time = time;
+          plots[0].updateBounds();
+          plots[1].updateBounds();
+          renderPlots();
+          input.classList.remove('error');
+        } else {
+          input.classList.add('error');
+        }
+      } else {
+        input.classList.add('error');
+      }
+    });
+
+    input.addEventListener('blur', () => {
+      input.value = selectedPiece[host].time * effect.duration;
+      input.classList.remove('error');
     });
   };
 
@@ -660,9 +696,9 @@ function initialize() {
     selectedPiece.name = pieceNameInput.value;
   });
 
-  registerPieceFloatListener('start', startTimeInput, 'time');
+  registerPieceTimeListener('start', startTimeInput);
   registerPieceFloatListener('start', startValueInput, 'value');
-  registerPieceFloatListener('control', controlTimeInput, 'time');
+  registerPieceTimeListener('control', controlTimeInput);
   registerPieceFloatListener('control', controlValueInput, 'value');
 
   const generateWavButton = document.getElementById('generate-wav-button');
