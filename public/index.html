@@ -9,8 +9,8 @@
 <body>
   <ul id="context-menu">
     <li id="fit-button">fit</li>
-    <li id="split-button">split</li>
-    <li id="delete-button">delete</li>
+    <li id="split-piece-button">split</li>
+    <li id="delete-piece-button">delete</li>
   </ul>
 
   <div id="root">
@@ -58,16 +58,20 @@
         <input id="control-value-input" type="text">
 
         <!-- --------------------------------------------------------------------- -->
-        <h1>I/O</h1>
+        <h1>Wav</h1>
 
         <button id="generate-wav-button">generate wav</button>
         <audio id="player" controls></audio>
         <button id="export-wav-button">export wav</button>
 
+        <!-- --------------------------------------------------------------------- -->
+        <h1>I/O</h1>
+
         <button id="new-button">new</button>
         <select id="open-picker"></select>
-        <button id="save-as-button">save as...</button>
-        <button id="save-button">save</button>
+        <button id="delete-effect-button">delete</button>
+        <button id="save-effect-button">save</button>
+        <button id="save-effect-as-button">save as...</button>
         <button id="export-archive-button">export archive</button>
       </div>
     </div>

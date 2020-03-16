@@ -36,9 +36,11 @@ let controlTimeInput;
 let controlValueLabel;
 let controlValueInput;
 
-let deleteButton;
-let splitButton;
+let deletePieceButton;
+let splitPieceButton;
 let openPicker;
+let deleteEffectButton;
+let saveEffectButton;
 
 let canvases = [];
 
@@ -330,6 +332,24 @@ function generateWav() {
   player.src = wav;
 }
 
+function exportWav() {
+  const samples = effectToSamples(currentEffect);
+  const wav = samplesToWav(samples);
+  download(wav, `${currentName ? currentName : 'effect'}.wav`);
+}
+
+function exportArchive() {
+  const jsonUrl = `data:application/json,${JSON.stringify(effects)}`;
+  download(jsonUrl, 'earpiece_archive.json');
+}
+
+function download(url, name) {
+  const link = document.createElement('a');
+  link.download = name;
+  link.href = url;
+  link.click();
+}
+
 function hookElements() {
   contextMenu = document.getElementById('context-menu');
   durationInput = document.getElementById('duration-input');
@@ -346,9 +366,10 @@ function hookElements() {
   controlValueLabel = document.getElementById('control-value-label');
   controlValueInput = document.getElementById('control-value-input');
   player = document.getElementById('player');
-  deleteButton = document.getElementById('delete-button');
-  splitButton = document.getElementById('split-button');
+  deletePieceButton = document.getElementById('delete-piece-button');
+  splitPieceButton = document.getElementById('split-piece-button');
   openPicker = document.getElementById('open-picker');
+  deleteEffectButton = document.getElementById('delete-effect-button');
 
   canvases.push(document.getElementById('frequency-canvas'));
   canvases.push(document.getElementById('amplitude-canvas'));
@@ -423,7 +444,7 @@ class Plot {
     this.canvas.addEventListener('click', this.onMouseClick);
     this.canvas.addEventListener('contextmenu', this.onContextMenu);
 
-    deleteButton.addEventListener('click', () => {
+    deletePieceButton.addEventListener('click', () => {
       if (selectedPieces === this.pieces && selectedPieceIndex > 0 && selectedPieceIndex < selectedPieces.length - 1) {
         selectedPieces.splice(selectedPieceIndex, 1);
         synchronizePieceOptions();
@@ -434,7 +455,7 @@ class Plot {
       contextMenu.style.display = 'none';
     });
 
-    splitButton.addEventListener('click', mouseAt => {
+    splitPieceButton.addEventListener('click', mouseAt => {
       contextMenu.style.display = 'none';
       if (selectedPieces === this.pieces && selectedPieceIndex < selectedPieces.length - 1) {
         const mouseAt = this.getMouseAt(event);
@@ -793,6 +814,11 @@ function initialize() {
 
   waveTypePicker.addEventListener('change', () => {
     currentEffect.waveType = waveTypePicker.value;
+    if (currentEffect.waveType === Wave.Square) {
+      currentEffect.dutyCycle = 0.5;
+    } else {
+      delete currentEffect.dutyCycle;
+    }
     synchronizeWaveOptions();
     renderPlots();
   });
@@ -808,6 +834,14 @@ function initialize() {
 
   interpolantPicker.addEventListener('change', () => {
     selectedPiece.interpolant = interpolantPicker.value;
+    if (selectedPiece.interpolant === Interpolant.Quadratic) {
+      const successor = selectedPieces[selectedPieceIndex + 1].start;
+      const time = (selectedPiece.start.time + successor.time) * 0.5;
+      const value = (selectedPiece.start.value + successor.value) * 0.5;
+      selectedPiece.control = {time, value};
+    } else {
+      delete selectedPiece.control;
+    }
     loadPiece(selectedPieces, selectedPieceIndex);
   });
 
@@ -830,14 +864,20 @@ function initialize() {
     contextMenu.style.display = 'none';
   });
 
-  const saveAsButton = document.getElementById('save-as-button');
-  saveAsButton.addEventListener('click', saveAs);
+  const saveEffectAsButton = document.getElementById('save-effect-as-button');
+  saveEffectAsButton.addEventListener('click', saveAs);
 
-  const saveButton = document.getElementById('save-button');
-  saveButton.addEventListener('click', save);
+  saveEffectButton = document.getElementById('save-effect-button');
+  saveEffectButton.addEventListener('click', save);
+
+  const exportWavButton = document.getElementById('export-wav-button');
+  exportWavButton.addEventListener('click', exportWav);
 
   const newButton = document.getElementById('new-button');
   newButton.addEventListener('click', () => {
+    currentName = null;
+    deleteEffectButton.disabled = true;
+    saveEffectButton.disabled = true;
     loadEffect(cloneEffect(defaultEffect));
   });
 
@@ -846,8 +886,25 @@ function initialize() {
     if (name) {
       currentName = name;
       loadEffect(effects[name]);
+      deleteEffectButton.disabled = false;
+      saveEffectButton.disabled = false;
     }
   });
+
+  deleteEffectButton.addEventListener('click', () => {
+    delete effects[currentName];
+    currentName = null;
+    deleteEffectButton.disabled = true;
+    saveEffectButton.disabled = true;
+    synchronizeOpenOptions();
+    loadEffect(cloneEffect(defaultEffect));
+  });
+
+  const exportArchiveButton = document.getElementById('export-archive-button');
+  exportArchiveButton.addEventListener('click', exportArchive);
+
+  deleteEffectButton.disabled = true;
+  saveEffectButton.disabled = true;
 
   const json = localStorage.getItem('effects');
   effects = JSON.parse(json);
@@ -871,16 +928,21 @@ function save() {
 function saveAs() {
   const name = prompt('Name of effect:');
   if (name && name.length > 0) {
+    currentName = name;
     effects[name] = currentEffect;
     updateStorage();
+    synchronizeOpenOptions();
+    deleteEffectButton.disabled = false;
+    saveEffectButton.disabled = false;
+    openPicker.value = name;
   }
 }
 
 function updateStorage() {
   const json = serializeEffects();
   localStorage.setItem('effects', json);
-  synchronizeOpenOptions();
 }
+window.updateStorage = updateStorage;
 
 function synchronizeWaveOptions() {
   dutyCycleInput.value = currentEffect.dutyCycle;
@@ -961,6 +1023,7 @@ function loadPiece(pieces, index) {
   synchronizePieceInputs(selectedPiece);
 
   startTimeInput.disabled = index === 0 || index === pieces.length - 1;
+  interpolantPicker.disabled = index === pieces.length - 1;
 
   const display = selectedPiece.interpolant === Interpolant.Quadratic ? 'inline' : 'none';
   controlTimeInput.style.display = display;
