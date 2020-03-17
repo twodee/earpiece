@@ -40,7 +40,6 @@ let deletePieceButton;
 let splitPieceButton;
 let openPicker;
 let deleteEffectButton;
-let saveEffectButton;
 
 let canvases = [];
 
@@ -897,11 +896,11 @@ function initialize() {
     contextMenu.style.display = 'none';
   });
 
-  const saveEffectAsButton = document.getElementById('save-effect-as-button');
-  saveEffectAsButton.addEventListener('click', saveAs);
+  const duplicateButton = document.getElementById('duplicate-button');
+  duplicateButton.addEventListener('click', duplicate);
 
-  saveEffectButton = document.getElementById('save-effect-button');
-  saveEffectButton.addEventListener('click', save);
+  const saveAllButton = document.getElementById('save-all-button');
+  saveAllButton.addEventListener('click', saveAll);
 
   const exportWavButton = document.getElementById('export-wav-button');
   exportWavButton.addEventListener('click', exportWav);
@@ -911,14 +910,13 @@ function initialize() {
     if (name === 'new') {
       currentName = null;
       deleteEffectButton.disabled = true;
-      saveEffectButton.disabled = true;
       loadEffect(cloneEffect(defaultEffect));
       openPicker.value = '';
+      duplicate();
     } else if (name) {
       currentName = name;
       loadEffect(effects[name]);
       deleteEffectButton.disabled = false;
-      saveEffectButton.disabled = false;
     }
   });
 
@@ -926,7 +924,6 @@ function initialize() {
     delete effects[currentName];
     currentName = null;
     deleteEffectButton.disabled = true;
-    saveEffectButton.disabled = true;
     synchronizeOpenOptions();
     loadEffect(cloneEffect(defaultEffect));
   });
@@ -959,7 +956,6 @@ function initialize() {
   });
 
   deleteEffectButton.disabled = true;
-  saveEffectButton.disabled = true;
 
   const json = localStorage.getItem('effects');
   if (json) {
@@ -973,36 +969,24 @@ function initialize() {
   resize();
 }
 
-function save() {
-  if (currentName) {
-    effects[currentName] = currentEffect;
-    updateStorage();
-  } else {
-    saveAs();
-  }
-}
-
-function saveAs() {
-  const name = prompt('Name of effect:');
+function duplicate() {
+  const name = prompt('Name of new effect:');
   if (name && name.length > 0) {
     currentName = name;
     const newEffect = cloneEffect(currentEffect);
-    newEffect.duration = 5;
     effects[name] = newEffect;
     loadEffect(newEffect);
-    updateStorage();
     synchronizeOpenOptions();
     deleteEffectButton.disabled = false;
-    saveEffectButton.disabled = false;
     openPicker.value = name;
   }
 }
 
-function updateStorage() {
+function saveAll() {
   const json = serializeEffects();
   localStorage.setItem('effects', json);
 }
-window.updateStorage = updateStorage;
+window.saveAll = saveAll;
 
 function synchronizeWaveOptions() {
   dutyCycleInput.value = currentEffect.dutyCycle;
