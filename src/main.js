@@ -301,21 +301,28 @@ function clonePiece(piece) {
     start: {time: piece.start.time, value: piece.start.value},
     interpolant: piece.interpolant,
   };
+
   if (piece.interpolant === Interpolant.Quadratic) {
     clone.control = {time: piece.control.time, value: piece.control.value};
   }
+
   return clone;
 }
 
 function cloneEffect(effect) {
-  return {
+  const clone = {
     rate: effect.rate,
     waveType: effect.waveType,
-    dutyCycle: effect.dutyCycle,
     duration: effect.duration,
     frequencies: effect.frequencies.map(piece => clonePiece(piece)),
     amplitudes: effect.amplitudes.map(piece => clonePiece(piece)),
   };
+
+  if (effect.waveType === Wave.Square) {
+    clone.dutyCycle = effect.dutyCycle;
+  }
+
+  return clone;
 }
 
 function serializeEffects() {
@@ -612,7 +619,6 @@ class Plot {
 
     // Don't allow first and last pieces to have their start time moved.
     if ((this.dragIndex > 0 && this.dragIndex < this.pieces.length - 1) || this.dragHandle !== this.dragPiece.start) {
-
       const predecessor = getPredecessorHandle(this.pieces, this.dragIndex, this.dragHandle);
       const successor = getSuccessorHandle(this.pieces, this.dragIndex, this.dragHandle);
       if (predecessor.time < time && time < successor.time) {
@@ -725,6 +731,33 @@ class Plot {
         this.context.arc(this.timeToPixel(piece.control.time), this.valueToPixel(piece.control.value), 5, 0, 2 * Math.PI);
         this.context.fill();
       }
+    }
+
+    if (this.dragHandle) {
+      this.context.font = '12px sans-serif';
+      this.context.textAlign = 'center';
+      this.context.textBaseline = 'bottom';
+
+      const label = `(${(this.dragHandle.time * currentEffect.duration).toShortFloat()}, ${this.dragHandle.value})`;
+      const measures = this.context.measureText(label);
+
+      let x = this.timeToPixel(this.dragHandle.time);
+      let y = this.valueToPixel(this.dragHandle.value);
+
+      if (x - measures.width / 2 < 0) {
+        x += Math.abs(x - measures.width / 2);
+      } else if (x + measures.width / 2 > this.canvas.width) {
+        x -= Math.abs(x + measures.width / 2 - this.canvas.width);
+      }
+
+      if (y - measures.actualBoundingBoxAscent - 10 < 0) {
+        this.context.textBaseline = 'top';
+        y += 10;
+      } else {
+        y -= 10;
+      }
+
+      this.context.fillText(label, x, y);
     }
   }
 }
@@ -873,17 +906,15 @@ function initialize() {
   const exportWavButton = document.getElementById('export-wav-button');
   exportWavButton.addEventListener('click', exportWav);
 
-  const newButton = document.getElementById('new-button');
-  newButton.addEventListener('click', () => {
-    currentName = null;
-    deleteEffectButton.disabled = true;
-    saveEffectButton.disabled = true;
-    loadEffect(cloneEffect(defaultEffect));
-  });
-
   openPicker.addEventListener('change', () => {
     const name = openPicker.value; 
-    if (name) {
+    if (name === 'new') {
+      currentName = null;
+      deleteEffectButton.disabled = true;
+      saveEffectButton.disabled = true;
+      loadEffect(cloneEffect(defaultEffect));
+      openPicker.value = '';
+    } else if (name) {
       currentName = name;
       loadEffect(effects[name]);
       deleteEffectButton.disabled = false;
@@ -903,11 +934,37 @@ function initialize() {
   const exportArchiveButton = document.getElementById('export-archive-button');
   exportArchiveButton.addEventListener('click', exportArchive);
 
+  const importArchiveButton = document.getElementById('import-archive-button');
+  const importArchiveInput = document.getElementById('import-archive-input');
+  importArchiveButton.addEventListener('click', () => {
+    importArchiveInput.click();
+  });
+  importArchiveInput.addEventListener('change', event => {
+    if (event.target.files.length > 0) {
+      const file = event.target.files[0];
+      const reader = new FileReader();
+      reader.onerror = event => {
+        console.log("error", event);
+      };
+      reader.onload = event => {
+        const json = event.target.result;
+        effects = JSON.parse(json);
+        synchronizeOpenOptions();
+        openPicker.value = '';
+        importArchiveInput.value = null;
+        loadEffect(cloneEffect(defaultEffect));
+      };
+      reader.readAsText(file);
+    }
+  });
+
   deleteEffectButton.disabled = true;
   saveEffectButton.disabled = true;
 
   const json = localStorage.getItem('effects');
-  effects = JSON.parse(json);
+  if (json) {
+    effects = JSON.parse(json);
+  }
 
   synchronizeOpenOptions();
   loadEffect(cloneEffect(defaultEffect));
@@ -929,7 +986,10 @@ function saveAs() {
   const name = prompt('Name of effect:');
   if (name && name.length > 0) {
     currentName = name;
-    effects[name] = currentEffect;
+    const newEffect = cloneEffect(currentEffect);
+    newEffect.duration = 5;
+    effects[name] = newEffect;
+    loadEffect(newEffect);
     updateStorage();
     synchronizeOpenOptions();
     deleteEffectButton.disabled = false;
@@ -982,7 +1042,12 @@ function synchronizeOpenOptions() {
 
   let option = document.createElement('option');
   option.value = '';
-  option.textContent = 'open...';
+  option.textContent = 'load effect...';
+  openPicker.appendChild(option);
+
+  option = document.createElement('option');
+  option.value = 'new';
+  option.textContent = 'new';
   openPicker.appendChild(option);
 
   for (let key of Object.keys(effects)) {

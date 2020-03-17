@@ -5,7 +5,7 @@
     "test": "jest test",
     "start": "webpack-dev-server --open --config webpack/webpack.development.js",
     "build": "webpack --config webpack/webpack.production.js",
-    "deploy": "ssh twodee \"rm /var/www/twodee/earpiece/*\" && scp -r public/* dist twodee:/var/www/twodee/earpiece && ssh twodee \"cd /var/www/twodee/earpiece && chmod -R g+rX *\""
+    "deploy": "ssh twodee \"rm -rf /var/www/earpiece/*\" && scp -r public/* dist twodee:/var/www/earpiece && ssh twodee \"cd /var/www/earpiece && chmod -R g+rX *\""
   },
   "devDependencies": {
     "@babel/core": "^7.8.7",
