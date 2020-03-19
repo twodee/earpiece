@@ -34,7 +34,12 @@ let interpolantPicker;
 let controlTimeLabel;
 let controlTimeInput;
 let controlValueLabel;
+let oscillationCheckbox;
 let controlValueInput;
+let cycleCountLabel;
+let cycleCountInput;
+let amplitudeLabel;
+let amplitudeInput;
 
 let deletePieceButton;
 let splitPieceButton;
@@ -125,7 +130,7 @@ function sine(p) {
 
 function square(duty) {
   return p => {
-    return p >= duty ? 0 : 1;
+    return p >= duty ? -1 : 1;
   };
 }
 
@@ -371,6 +376,11 @@ function hookElements() {
   controlTimeInput = document.getElementById('control-time-input');
   controlValueLabel = document.getElementById('control-value-label');
   controlValueInput = document.getElementById('control-value-input');
+  oscillationCheckbox = document.getElementById('oscillation-checkbox');
+  cycleCountLabel = document.getElementById('cycle-count-label');
+  cycleCountInput = document.getElementById('cycle-count-input');
+  amplitudeLabel = document.getElementById('amplitude-label');
+  amplitudeInput = document.getElementById('amplitude-input');
   player = document.getElementById('player');
   deletePieceButton = document.getElementById('delete-piece-button');
   splitPieceButton = document.getElementById('split-piece-button');
@@ -881,6 +891,15 @@ function initialize() {
     selectedPiece.name = pieceNameInput.value;
   });
 
+  oscillationCheckbox.addEventListener('change', () => {
+    if (oscillationCheckbox.checked) {
+      selectedPiece.oscillation = {cycleCount: 2, amplitude: 1};
+    } else {
+      delete selectedPiece.oscillation;
+    }
+    loadPiece(selectedPieces, selectedPieceIndex);
+  });
+
   registerPieceTimeListener('start', startTimeInput);
   registerPieceFloatListener('start', startValueInput, 'value');
   registerPieceTimeListener('control', controlTimeInput);
@@ -1074,11 +1093,24 @@ function loadPiece(pieces, index) {
   startTimeInput.disabled = index === 0 || index === pieces.length - 1;
   interpolantPicker.disabled = index === pieces.length - 1;
 
-  const display = selectedPiece.interpolant === Interpolant.Quadratic ? 'inline' : 'none';
+  let display = selectedPiece.interpolant === Interpolant.Quadratic ? 'inline' : 'none';
   controlTimeInput.style.display = display;
   controlValueInput.style.display = display;
   controlTimeLabel.style.display = display;
   controlValueLabel.style.display = display;
+
+  if (selectedPiece.oscillation) {
+    cycleCountInput.value = selectedPiece.oscillation.cycleCount;
+    amplitudeInput.value = selectedPiece.oscillation.amplitude;
+    display = 'inline';
+  } else {
+    display = 'none';
+  }
+
+  cycleCountLabel.style.display = display;
+  cycleCountInput.style.display = display;
+  amplitudeLabel.style.display = display;
+  amplitudeInput.style.display = display;
 
   renderPlots();
 }

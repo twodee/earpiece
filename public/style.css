@@ -75,7 +75,7 @@ body {
   margin: 10px;
   user-select: none;
   display: grid;
-  grid-template-columns: auto auto;
+  grid-template-columns: auto 1fr;
   grid-column-gap: 5px;
   grid-row-gap: 2px;
   align-items: center;
@@ -83,6 +83,11 @@ body {
   padding: 10px;
   overflow: auto;
   background-color: #e5fff2;
+}
+
+#spacer {
+  visibility: hidden;
+  height: 0px;
 }
 
 #right > h1 {
@@ -94,6 +99,10 @@ body {
   margin-top: 20px;
   border-top: 2px solid black;
   padding-top: 10px;
+}
+
+#wav-heading {
+  margin-top: 18px;
 }
 
 #right > label {
@@ -119,6 +128,10 @@ body {
 }
 
 #duty-cycle-label, #duty-cycle-input {
+  display: none;
+}
+
+#cycle-count-label, #cycle-count-input, #amplitude-label, #amplitude-input {
   display: none;
 }
 
