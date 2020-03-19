@@ -4,6 +4,12 @@ Number.prototype.toShortFloat = function() {
   return parseFloat(this.toLocaleString('fullwide', {useGrouping: false, maximumFractionDigits: 3}));
 }
 
+const Motion = Object.freeze({
+  Horizontal: 'Horizontal',
+  Vertical: 'Vertical',
+  Free: 'Free',
+});
+
 const Wave = Object.freeze({
   Sine: 'sine',
   Triangle: 'triangle',
@@ -544,7 +550,6 @@ class Plot {
     this.dragIndex = null;
     this.dragPiece = null;
     this.dragHandle = null;
-    this.mouseDown0 = null;
 
     this.updateBounds();
   }
@@ -632,6 +637,7 @@ class Plot {
       event.clientX - bounds.x,
       event.clientY - bounds.y
     ];
+    this.dragMotion = null;
 
     for (let [i, piece] of this.pieces.entries()) {
       if (this.isNearHandle(this.mouseDownAt, piece.start.time, piece.start.value)) {
@@ -669,20 +675,35 @@ class Plot {
     const time = this.pixelToTime(mouseAt[0]).toShortFloat();
     const value = this.pixelToValue(mouseAt[1]).toShortFloat();
 
+    if (this.dragMotion === null) {
+      if (event.shiftKey) {
+        const deltaX = Math.abs(mouseAt[0] - this.mouseDownAt[0]);
+        const deltaY = Math.abs(mouseAt[1] - this.mouseDownAt[1]);
+        if (deltaX >= deltaY) {
+          this.dragMotion = Motion.Horizontal;
+        } else {
+          this.dragMotion = Motion.Vertical;
+        }
+      } else {
+        this.dragMotion = Motion.Free;
+      }
+    }
+
     // Don't allow first and last pieces to have their start time moved.
     if ((this.dragIndex > 0 && this.dragIndex < this.pieces.length - 1) || this.dragHandle !== this.dragPiece.start) {
       const predecessor = getPredecessorHandle(this.pieces, this.dragIndex, this.dragHandle);
       const successor = getSuccessorHandle(this.pieces, this.dragIndex, this.dragHandle);
-      if (predecessor.time < time && time < successor.time) {
+      if (predecessor.time < time && time < successor.time && (this.dragMotion === Motion.Free || this.dragMotion === Motion.Horizontal)) {
         this.dragHandle.time = time;
       }
     }
 
-    if (this.isValueExpandable && value > this.maximumValue) {
-      this.maximumValue = value;
+    if (this.dragMotion === Motion.Free || this.dragMotion === Motion.Vertical) {
+      if (this.isValueExpandable && value > this.maximumValue) {
+        this.maximumValue = value;
+      }
+      this.dragHandle.value = Math.max(0, Math.min(value, this.maximumValue));
     }
-
-    this.dragHandle.value = Math.max(0, Math.min(value, this.maximumValue));
 
     synchronizePieceInputs(this.dragPiece);
     this.render();
@@ -1039,7 +1060,8 @@ function initialize() {
       };
       reader.onload = event => {
         const json = event.target.result;
-        effects = JSON.parse(json);
+        const newEffects = JSON.parse(json);
+        Object.assign(effects, newEffects);
         synchronizeOpenOptions();
         openPicker.value = '';
         importArchiveInput.value = null;
