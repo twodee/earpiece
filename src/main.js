@@ -31,15 +31,19 @@ let pieceNameInput;
 let startTimeInput;
 let startValueInput;
 let interpolantPicker;
+
 let controlTimeLabel;
 let controlTimeInput;
 let controlValueLabel;
-let oscillationCheckbox;
 let controlValueInput;
-let cycleCountLabel;
-let cycleCountInput;
-let amplitudeLabel;
-let amplitudeInput;
+
+let oscillationCheckbox;
+let oscillationCycleCountLabel;
+let oscillationCycleCountInput;
+let oscillationAmplitudeLabel;
+let oscillationAmplitudeInput;
+let oscillationFlipLabel;
+let oscillationFlipCheckbox;
 
 let deletePieceButton;
 let splitPieceButton;
@@ -148,37 +152,68 @@ function setInterpolators(pieces) {
     let next = pieces[i + 1];
 
     if (current.interpolant === 'constant') {
-      current.interpolate = constantInterpolant(current.start.value);
+      current.interpolate = constantInterpolant(current.start.time, current.start.value, next.start.time, next.start.value, current.oscillation);
     } else if (current.interpolant === 'linear') {
-      current.interpolate = linearInterpolant(current.start.time, current.start.value, next.start.time, next.start.value);
+      current.interpolate = linearInterpolant(current.start.time, current.start.value, next.start.time, next.start.value, current.oscillation);
     } else if (current.interpolant === 'quadratic') {
-      current.interpolate = quadraticInterpolant(current.start.time, current.start.value, current.control.time, current.control.value, next.start.time, next.start.value);
+      current.interpolate = quadraticInterpolant(current.start.time, current.start.value, current.control.time, current.control.value, next.start.time, next.start.value, current.oscillation);
     } else {
       console.log("boo");
     }
   }
 }
 
-function constantInterpolant(value) {
-  return () => value;
+function constantInterpolant(fromTime, fromValue, toTime, toValue, oscillation) {
+  if (oscillation) {
+    const frequency = oscillation.cycleCount / (toTime - fromTime);
+    const phaseShift = oscillation.flip ? Math.PI : 0;
+    return t => {
+      const elapsedTime = t - fromTime;
+      return fromValue + Math.sin(2 * Math.PI * frequency * elapsedTime + phaseShift) * oscillation.amplitude;
+    };
+  } else {
+    return t => {
+      return fromValue;
+    };
+  }
 }
 
-function linearInterpolant(fromTime, fromValue, toTime, toValue) {
+function linearInterpolant(fromTime, fromValue, toTime, toValue, oscillation) {
   const denominator = toTime - fromTime;
-  return t => {
-    const p = (t - fromTime) / denominator;
-    return (1 - p) * fromValue + p * toValue;
-  };
+
+  if (oscillation) {
+    const frequency = oscillation.cycleCount / denominator;
+    const phaseShift = oscillation.flip ? Math.PI : 0;
+    return t => {
+      const elapsedTime = t - fromTime;
+      const p = elapsedTime / denominator;
+      return (1 - p) * fromValue + p * toValue + Math.sin(2 * Math.PI * frequency * elapsedTime + phaseShift) * oscillation.amplitude;
+    };
+  } else {
+    return t => {
+      const p = (t - fromTime) / denominator;
+      return (1 - p) * fromValue + p * toValue;
+    };
+  }
 }
 
-function quadraticInterpolant(fromTime, fromValue, throughTime, throughValue, toTime, toValue) {
+function quadraticInterpolant(fromTime, fromValue, throughTime, throughValue, toTime, toValue, oscillation) {
   const denominator = (fromTime - throughTime) * (fromTime - toTime) * (throughTime - toTime);
   const a = (toTime * (throughValue - fromValue) + throughTime * (fromValue - toValue) + fromTime * (toValue - throughValue)) / denominator;
   const b = (toTime * toTime * (fromValue - throughValue) + throughTime * throughTime * (toValue - fromValue) + fromTime * fromTime * (throughValue - toValue)) / denominator;
   const c = (throughTime * toTime * (throughTime - toTime) * fromValue + toTime * fromTime * (toTime - fromTime) * throughValue + fromTime * throughTime * (fromTime - throughTime) * toValue) / denominator;
-  return t => {
-    return a * t * t + b * t + c;
-  };
+  if (oscillation) {
+    const frequency = oscillation.cycleCount / (toTime - fromTime);
+    const phaseShift = oscillation.flip ? Math.PI : 0;
+    return t => {
+      const elapsedTime = t - fromTime;
+      return a * t * t + b * t + c + Math.sin(2 * Math.PI * frequency * elapsedTime + phaseShift) * oscillation.amplitude;
+    };
+  } else {
+    return t => {
+      return a * t * t + b * t + c;
+    };
+  }
 }
 
 function effectToSamples(effect) {
@@ -310,6 +345,10 @@ function clonePiece(piece) {
     clone.control = {time: piece.control.time, value: piece.control.value};
   }
 
+  if (piece.oscillation) {
+    clone.oscillation = {cycleCount: piece.oscillation.cycleCount, amplitude: piece.oscillation.amplitude, flip: piece.oscillation.flip};
+  }
+
   return clone;
 }
 
@@ -376,11 +415,15 @@ function hookElements() {
   controlTimeInput = document.getElementById('control-time-input');
   controlValueLabel = document.getElementById('control-value-label');
   controlValueInput = document.getElementById('control-value-input');
+
   oscillationCheckbox = document.getElementById('oscillation-checkbox');
-  cycleCountLabel = document.getElementById('cycle-count-label');
-  cycleCountInput = document.getElementById('cycle-count-input');
-  amplitudeLabel = document.getElementById('amplitude-label');
-  amplitudeInput = document.getElementById('amplitude-input');
+  oscillationCycleCountLabel = document.getElementById('oscillation-cycle-count-label');
+  oscillationCycleCountInput = document.getElementById('oscillation-cycle-count-input');
+  oscillationAmplitudeLabel = document.getElementById('oscillation-amplitude-label');
+  oscillationAmplitudeInput = document.getElementById('oscillation-amplitude-input');
+  oscillationFlipLabel = document.getElementById('oscillation-flip-label');
+  oscillationFlipCheckbox = document.getElementById('oscillation-flip-checkbox');
+
   player = document.getElementById('player');
   deletePieceButton = document.getElementById('delete-piece-button');
   splitPieceButton = document.getElementById('split-piece-button');
@@ -710,17 +753,26 @@ class Plot {
       if (curr.interpolant === Interpolant.Linear) {
         this.context.beginPath();
         this.context.moveTo(this.timeToPixel(curr.start.time), this.valueToPixel(curr.start.value));
+        const interpolator = linearInterpolant(curr.start.time, curr.start.value, next.start.time, next.start.value, curr.oscillation);
+        const deltaT = 1 / this.width;
+        for (let t = curr.start.time; t < next.start.time; t += deltaT) {
+          this.context.lineTo(this.timeToPixel(t), this.valueToPixel(interpolator(t)));
+        }
         this.context.lineTo(this.timeToPixel(next.start.time), this.valueToPixel(next.start.value));
         this.context.stroke();
       } else if (curr.interpolant === Interpolant.Constant) {
         this.context.beginPath();
         this.context.moveTo(this.timeToPixel(curr.start.time), this.valueToPixel(curr.start.value));
-        this.context.lineTo(this.timeToPixel(next.start.time), this.valueToPixel(curr.start.value));
+        const interpolator = constantInterpolant(curr.start.time, curr.start.value, next.start.time, next.start.value, curr.oscillation);
+        const deltaT = 1 / this.width;
+        for (let t = curr.start.time; t < next.start.time; t += deltaT) {
+          this.context.lineTo(this.timeToPixel(t), this.valueToPixel(interpolator(t)));
+        }
         this.context.stroke();
       } else if (curr.interpolant === Interpolant.Quadratic) {
         this.context.beginPath();
         this.context.moveTo(this.timeToPixel(curr.start.time), this.valueToPixel(curr.start.value));
-        const interpolator = quadraticInterpolant(curr.start.time, curr.start.value, curr.control.time, curr.control.value, next.start.time, next.start.value);
+        const interpolator = quadraticInterpolant(curr.start.time, curr.start.value, curr.control.time, curr.control.value, next.start.time, next.start.value, curr.oscillation);
         const deltaT = 1 / this.width;
         for (let t = curr.start.time; t < next.start.time; t += deltaT) {
           this.context.lineTo(this.timeToPixel(t), this.valueToPixel(interpolator(t)));
@@ -800,6 +852,21 @@ function initialize() {
       if (input.value.match(/^\d+(\.\d+)?$/)) {
         currentEffect[key] = parseFloat(input.value);
         synchronizePieceInputs(selectedPiece);
+        renderPlots();
+        input.classList.remove('error');
+      } else {
+        input.classList.add('error');
+      }
+    });
+  };
+
+  const registerPieceIntListener = (host, input, key) => {
+    input.addEventListener('input', () => {
+      if (input.value.match(/^\d+$/)) {
+        let value = parseInt(input.value);
+        selectedPiece[host][key] = value;
+        plots[0].updateBounds();
+        plots[1].updateBounds();
         renderPlots();
         input.classList.remove('error');
       } else {
@@ -893,12 +960,20 @@ function initialize() {
 
   oscillationCheckbox.addEventListener('change', () => {
     if (oscillationCheckbox.checked) {
-      selectedPiece.oscillation = {cycleCount: 2, amplitude: 1};
+      selectedPiece.oscillation = {cycleCount: 3, amplitude: selectedPieces === currentEffect.frequencies ? 100 : 0.1, flip: false};
     } else {
       delete selectedPiece.oscillation;
     }
     loadPiece(selectedPieces, selectedPieceIndex);
   });
+
+  oscillationFlipCheckbox.addEventListener('change', () => {
+    selectedPiece.oscillation.flip = oscillationFlipCheckbox.checked;
+    loadPiece(selectedPieces, selectedPieceIndex);
+  });
+
+  registerPieceIntListener('oscillation', oscillationCycleCountInput, 'cycleCount');
+  registerPieceFloatListener('oscillation', oscillationAmplitudeInput, 'amplitude');
 
   registerPieceTimeListener('start', startTimeInput);
   registerPieceFloatListener('start', startValueInput, 'value');
@@ -1099,18 +1174,23 @@ function loadPiece(pieces, index) {
   controlTimeLabel.style.display = display;
   controlValueLabel.style.display = display;
 
+  oscillationCheckbox.checked = !!selectedPiece.oscillation;
+
   if (selectedPiece.oscillation) {
-    cycleCountInput.value = selectedPiece.oscillation.cycleCount;
-    amplitudeInput.value = selectedPiece.oscillation.amplitude;
+    oscillationCycleCountInput.value = selectedPiece.oscillation.cycleCount;
+    oscillationAmplitudeInput.value = selectedPiece.oscillation.amplitude;
+    oscillationFlipCheckbox.checked = selectedPiece.oscillation.flip;
     display = 'inline';
   } else {
     display = 'none';
   }
 
-  cycleCountLabel.style.display = display;
-  cycleCountInput.style.display = display;
-  amplitudeLabel.style.display = display;
-  amplitudeInput.style.display = display;
+  oscillationCycleCountLabel.style.display = display;
+  oscillationCycleCountInput.style.display = display;
+  oscillationAmplitudeLabel.style.display = display;
+  oscillationAmplitudeInput.style.display = display;
+  oscillationFlipLabel.style.display = display;
+  oscillationFlipCheckbox.style.display = display;
 
   renderPlots();
 }

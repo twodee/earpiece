@@ -184,3 +184,8 @@ input[type="text"]:disabled {
 #import-archive-input {
   display: none;
 }
+
+#oscillation-spacer {
+  height: 10px;
+  grid-column: 1 / span 2;
+}
